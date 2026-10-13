@@ -76,28 +76,28 @@ export function PermissionsSection({
             <Crown size={17} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-medium text-ink">Chief of Staff</div>
-            <div className="text-[11.5px] text-ink-secondary">One for {sectionName}</div>
+            <div className="text-[15px] font-medium text-ink">{t("botSettings.permissions.chief")}</div>
+            <div className="text-[11.5px] text-ink-secondary">{t("botSettings.permissions.chiefOne", { section: sectionName })}</div>
           </div>
           <Switch
             checked={Boolean(bot.chiefOfStaff)}
-            aria-label="Chief of Staff"
+            aria-label={t("botSettings.permissions.chief")}
             disabled={!bot.chiefOfStaff && !canCoordinate}
             onClick={() => patch({ chiefOfStaff: !bot.chiefOfStaff })}
-            title={!bot.chiefOfStaff && !canCoordinate ? "This model cannot contact other bots" : undefined}
+            title={!bot.chiefOfStaff && !canCoordinate ? t("botSettings.permissions.cannotContact") : undefined}
             className="disabled:cursor-not-allowed"
           />
         </div>
         <div className="mt-3 text-[13px] leading-relaxed text-ink-secondary">
           {bot.chiefOfStaff && !canCoordinate
-            ? "This bot still holds the role, but its current provider cannot contact teammates. Choose a provider that supports bot coordination."
+            ? t("botSettings.permissions.chiefProviderBlocked")
             : bot.chiefOfStaff
-              ? `This is the primary contact for ${sectionName}. It can create and coordinate specialists in this team, then combine their work into one answer.`
+              ? t("botSettings.permissions.chiefPrimary", { section: sectionName })
               : !canCoordinate
-                ? "Choose a provider that supports bot coordination."
+                ? t("botSettings.permissions.chiefChooseProvider")
                 : currentChief
-                  ? `Make this bot the ${sectionName} Chief and hand the role over from ${currentChief.name}.`
-                  : `Make this bot the primary contact for the ${sectionName} team.`}
+                  ? t("botSettings.permissions.chiefHandover", { section: sectionName, name: currentChief.name })
+                  : t("botSettings.permissions.chiefMake", { section: sectionName })}
         </div>
         <ProposalStatus bot={bot} kind="chief" />
         {bot.chiefOfStaff && <ManagedTeamsSettings
@@ -112,28 +112,28 @@ export function PermissionsSection({
 
       <div className="flex items-center justify-between gap-4 rounded-xl bg-card p-4">
         <div>
-          <div className="text-[15px] font-medium text-ink">Ask me before contacting other bots</div>
+          <div className="text-[15px] font-medium text-ink">{t("botSettings.permissions.askPeers")}</div>
           <div className="mt-0.5 text-[13px] text-ink-secondary">
             {bot.approvePeerComms
-              ? "This bot will stop and ask before it reaches out to another bot."
-              : "Let this bot talk to teammates on its own, without a confirmation step."}
+              ? t("botSettings.permissions.askPeersOn")
+              : t("botSettings.permissions.askPeersOff")}
           </div>
           <ProposalStatus bot={bot} kind="owner" />
         </div>
         <Switch
           checked={Boolean(bot.approvePeerComms)}
-          aria-label="Ask me before contacting other bots"
+          aria-label={t("botSettings.permissions.askPeers")}
           disabled={!bot.approvePeerComms && !canCoordinate}
           onClick={() => patch({ approvePeerComms: !bot.approvePeerComms })}
-          title={!bot.approvePeerComms && !canCoordinate ? "This model cannot contact other bots" : undefined}
+          title={!bot.approvePeerComms && !canCoordinate ? t("botSettings.permissions.cannotContact") : undefined}
           className="disabled:cursor-not-allowed"
         />
       </div>
 
       <div className="rounded-xl bg-card p-4">
-        <div className="text-[15px] font-medium text-ink">Approval level</div>
+        <div className="text-[15px] font-medium text-ink">{t("botSettings.permissions.approvalLevel")}</div>
         <div className="mt-0.5 text-[13px] text-ink-secondary">
-          {draft ? "Default for the new bot's threads, routines and delegated work." : "Default for new threads, routines and delegated work. Full access also applies at once to every existing thread. Use Refresh permissions on a thread to apply the current level to that conversation."}
+          {draft ? t("botSettings.permissions.approvalHintDraft") : t("botSettings.permissions.approvalHint")}
         </div>
         <ProposalStatus bot={bot} kind="owner" />
         <div className="mt-3">
@@ -154,7 +154,7 @@ export function PermissionsSection({
           type="button" disabled={Boolean(bot.busy)}
           className="mt-3 text-[13px] text-accent hover:underline disabled:opacity-40"
           onClick={applyFullEverywhere}
-        >Apply Full access to all threads</button>}
+        >{t("botSettings.permissions.applyFull")}</button>}
         {!draft && ownerOrAdmin === true && <button
           type="button"
           className="mt-3 block text-[13px] text-accent hover:underline"
@@ -219,16 +219,15 @@ function OutboundControl({ bot, onChange }: { bot: Bot; onChange: (policy: Outbo
 
   return (
     <div className="rounded-xl bg-card p-4">
-      <div className="text-[15px] font-medium text-ink">Sending on your behalf</div>
+      <div className="text-[15px] font-medium text-ink">{t("botSettings.permissions.outbound")}</div>
       <div className="mt-0.5 text-[13px] text-ink-secondary">
-        Emails, messages, posts, invites, and payments through connected apps. Reading and drafting never count.
-        This applies at every approval level, including Full access.
+        {t("botSettings.permissions.outboundHint")}
       </div>
       <div className="mt-3 flex gap-1 rounded-lg bg-inset p-0.5">
         {(
           [
-            ["ask", "Ask every time", "Every send waits for your tap."],
-            ["allow", "Allow a daily amount", "Sends go out on their own, up to the cap below."],
+            ["ask", t("botSettings.permissions.outboundAsk"), t("botSettings.permissions.outboundAskHint")],
+            ["allow", t("botSettings.permissions.outboundAllow"), t("botSettings.permissions.outboundAllowHint")],
           ] as const
         ).map(([value, label, hint]) => (
           <button
@@ -251,7 +250,7 @@ function OutboundControl({ bot, onChange }: { bot: Bot; onChange: (policy: Outbo
       {policy.policy === "allow" && (
         <div className="mt-3 flex flex-wrap items-center gap-3 text-[13px] text-ink-secondary">
           <label className="flex items-center gap-2">
-            Up to
+            {t("botSettings.permissions.outboundUpTo")}
             <input
               type="number"
               min={1}
@@ -262,13 +261,13 @@ function OutboundControl({ bot, onChange }: { bot: Bot; onChange: (policy: Outbo
               onKeyDown={(event) => {
                 if (event.key === "Enter") (event.target as HTMLInputElement).blur();
               }}
-              aria-label="Daily outbound limit"
+              aria-label={t("botSettings.permissions.outboundLimitAria")}
               className="w-20 rounded-md bg-inset px-2 py-1 text-[13px] text-ink tabular-nums outline-none focus:ring-1 focus:ring-accent"
             />
-            a day
+            {t("botSettings.permissions.outboundADay")}
           </label>
           <span className="tabular-nums">
-            {today === null ? "" : `${today} of ${policy.dailyCap} used today`}
+            {today === null ? "" : t("botSettings.permissions.outboundUsed", { today, cap: policy.dailyCap })}
           </span>
         </div>
       )}

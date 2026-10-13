@@ -46,11 +46,11 @@ describe("schedule labels", () => {
 
   it("labels a change by time today and by date otherwise", () => {
     const now = Date.now();
-    expect(whenLabel(now)).toBe(new Date(now).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    expect(whenLabel(now)).toBe(new Date(now).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" }));
     const lastYear = new Date(now);
     lastYear.setFullYear(lastYear.getFullYear() - 1);
     expect(whenLabel(lastYear.getTime())).toBe(
-      lastYear.toLocaleDateString([], { month: "short", day: "numeric" }),
+      lastYear.toLocaleDateString("en", { month: "short", day: "numeric" }),
     );
   });
 });

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { BOT_PROFILE_LIMITS } from "../../shared/bot-profile";
 import { cn } from "@/lib/cn";
+import { t } from "@/lib/i18n";
 import { firstSentence, soulPatchFor, utf8Bytes } from "@/lib/soul";
 import { useStore, type Bot } from "@/state/store";
 import { useBotEditor } from "./bot-settings/BotEditorContext";
@@ -82,7 +83,7 @@ export function SoulField({
     <div className="block">
       <div className="mb-1.5 flex items-center justify-between gap-3">
         <label htmlFor={`bot-soul-${bot.id}`} className={simple ? "text-[12px] text-ink-secondary" : "text-[13px] text-ink-secondary"}>
-          {simple ? simple.label : "Standing instructions (SOUL.md)"}
+          {simple ? simple.label : t("botSettings.soul.label")}
         </label>
         {!simple && canMigrate && (
           <button
@@ -91,23 +92,23 @@ export function SoulField({
             onClick={() => onPatch({ soul: bot.description, description: firstSentence(bot.description) })}
             className="rounded-md px-1.5 py-1 text-[11.5px] font-medium text-accent-text hover:bg-accent/10"
           >
-            Move instructions into SOUL.md
+            {t("botSettings.soul.move")}
           </button>
         )}
       </div>
       {info?.drift && (
         <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-[12px] text-ink">
-          <div className="font-medium">SOUL.md on disk was edited outside the app.</div>
-          <div className="mt-1 text-ink-secondary">
-            The bot keeps using the saved version until you choose. File: <span className="break-all">{info.file}</span>
+          <div className="font-medium">{t("botSettings.soul.driftTitle")}</div>
+          <div className="mt-1 text-ink-secondary break-all">
+            {t("botSettings.soul.driftBody", { file: info.file })}
           </div>
           <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-control p-2 text-[11.5px]">{info.fileText}</pre>
           <div className="mt-2 flex gap-2">
             <button type="button" disabled={resolving} onClick={() => void resolve("apply-file")} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:brightness-110 disabled:opacity-50">
-              Use the file
+              {t("botSettings.soul.driftApply")}
             </button>
             <button type="button" disabled={resolving} onClick={() => void resolve("discard-file")} className="rounded-lg bg-control px-3 py-1.5 text-[12px] text-ink hover:bg-raised-hover disabled:opacity-50">
-              Keep the saved version
+              {t("botSettings.soul.driftKeep")}
             </button>
           </div>
         </div>
@@ -119,7 +120,7 @@ export function SoulField({
           simple ? "min-h-[140px] resize-y rounded-xl text-[14px] leading-relaxed" : "min-h-[220px] resize-y font-mono leading-relaxed",
           over && "ring-2 ring-red-500/60",
         )}
-        placeholder={simple ? simple.placeholder : "Who this bot is and the rules it never breaks. Keep it short; put step-by-step procedure into a skill."}
+        placeholder={simple ? simple.placeholder : t("botSettings.soul.placeholder")}
         aria-invalid={over || undefined}
         disabled={resolving}
         value={draft}
@@ -127,10 +128,10 @@ export function SoulField({
       />
       {(!simple || over) && <div className="mt-1.5 flex items-start justify-between gap-3 text-[11px] text-ink-secondary">
         <span>
-          {!simple && <>In this bot’s context on every turn.{info?.file ? <> Mirrored to <span className="break-all">{info.file}</span>.</> : null}</>}
+          {!simple && <>{t("botSettings.soul.inContext")}{info?.file ? <> {t("botSettings.soul.mirroredTo", { file: info.file })}</> : null}</>}
         </span>
         <span className={cn("shrink-0 tabular-nums", over && "font-medium text-red-500")}>
-          {bytes.toLocaleString()} / {limit.toLocaleString()} bytes{over ? " — not saved" : ""}
+          {t("botSettings.soul.counter", { bytes: bytes.toLocaleString(), limit: limit.toLocaleString() })}{over ? ` — ${t("botSettings.soul.notSaved")}` : ""}
         </span>
       </div>}
     </div>
