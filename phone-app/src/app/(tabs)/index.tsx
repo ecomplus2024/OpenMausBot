@@ -1,4 +1,4 @@
-import { Link, router } from "expo-router";
+import { Link, Redirect, router } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
@@ -47,6 +47,8 @@ export default function BotsScreen() {
   const { bots, status, refresh, unpair, serverName } = useFleet();
   const [refreshing, setRefreshing] = React.useState(false);
 
+  if (status === "unpaired") return <Redirect href="/pair" />;
+
   if (status === "offline") {
     return (
       <View style={styles.empty}>
@@ -78,10 +80,16 @@ export default function BotsScreen() {
           />
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <ActivityIndicator />
-            <Text style={styles.hint}>Loading your bots…</Text>
-          </View>
+          status === "paired" ? (
+            <View style={styles.empty}>
+              <Text style={styles.hint}>No bots yet — create one on your computer.</Text>
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <ActivityIndicator />
+              <Text style={styles.hint}>Loading your bots…</Text>
+            </View>
+          )
         }
         ItemSeparatorComponent={() => <View style={styles.sep} />}
       />

@@ -43,7 +43,7 @@ async function pairAcrossEndpoints(invite: PairingInvite, deviceName: string) {
 }
 
 export default function PairScreen() {
-  const { refresh } = useFleet();
+  const { connect } = useFleet();
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +59,9 @@ export default function PairScreen() {
       try {
         const session = await pairAcrossEndpoints(invite, "Android");
         await saveSession(session);
-        await refresh();
+        // Re-run the boot sequence so the store builds a Client from the
+        // session we just saved — refresh() alone is a no-op without one.
+        await connect();
         router.replace("/(tabs)");
       } catch (cause) {
         handled.current = false;
@@ -68,7 +70,7 @@ export default function PairScreen() {
         setBusy(false);
       }
     },
-    [refresh],
+    [connect],
   );
 
   const onScanned = useCallback(

@@ -41,6 +41,7 @@ interface FleetState {
 }
 
 interface FleetActions {
+  connect(): Promise<void>;
   refresh(): Promise<void>;
   openThread(threadId: string): Promise<void>;
   loadOlder(threadId: string): Promise<void>;
@@ -324,6 +325,7 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<FleetState & FleetActions>(
     () => ({
       ...state,
+      connect,
       refresh,
       openThread,
       loadOlder,
@@ -334,7 +336,7 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
       dismissCard,
       unpair,
     }),
-    [state, refresh, openThread, loadOlder, sendText, interrupt, markRead, answerCard, dismissCard, unpair],
+    [state, connect, refresh, openThread, loadOlder, sendText, interrupt, markRead, answerCard, dismissCard, unpair],
   );
 
   return <FleetContext.Provider value={value}>{children}</FleetContext.Provider>;
