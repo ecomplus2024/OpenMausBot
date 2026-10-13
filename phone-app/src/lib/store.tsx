@@ -13,7 +13,8 @@ import { AppState } from "react-native";
 
 import { Client, UnpairedError } from "./client";
 import { openEvents, type EventsHandle } from "./events";
-import { clearSession, loadSession, saveSession } from "./session";
+import { clearSession, loadSession, loadMarks, saveMarks, saveSession } from "./session";
+import type { ShapeId } from "./theme";
 import type {
   FleetResponse,
   OptionCardData,
@@ -31,6 +32,11 @@ interface ThreadState {
   loaded: boolean;
 }
 
+export interface BotMark {
+  color?: string;
+  shape?: ShapeId;
+}
+
 interface FleetState {
   status: "loading" | "paired" | "unpaired" | "offline";
   serverName: string;
@@ -38,6 +44,9 @@ interface FleetState {
   groups: WireGroup[];
   connected: boolean;
   threads: Record<string, ThreadState>;
+  /** Per-device avatar overrides; the companion cannot write bot colors,
+   * so a mark chosen here stays on this phone. */
+  marks: Record<string, BotMark>;
 }
 
 interface FleetActions {
@@ -50,6 +59,7 @@ interface FleetActions {
   markRead(threadId: string): Promise<void>;
   answerCard(threadId: string, card: OptionCardData, option: string): Promise<void>;
   dismissCard(threadId: string, card: OptionCardData): Promise<void>;
+  setMark(botId: string, patch: BotMark): void;
   unpair(): Promise<void>;
 }
 
@@ -79,6 +89,7 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
     groups: [],
     connected: false,
     threads: {},
+    marks: {},
   });
   const clientRef = useRef<Client | null>(null);
   const eventsRef = useRef<EventsHandle | null>(null);
@@ -119,7 +130,8 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const connect = useCallback(async () => {
-    const session = await loadSession();
+    const [session, marks] = await Promise.all([loadSession(), loadMarks()]);
+    if (Object.keys(marks).length) setState((s) => ({ ...s, marks }));
     if (!session) {
       setState((s) => ({ ...s, status: "unpaired" }));
       return;
@@ -315,11 +327,19 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const setMark = useCallback((botId: string, patch: BotMark) => {
+    setState((s) => {
+      const marks = { ...s.marks, [botId]: { ...s.marks[botId], ...patch } };
+      void saveMarks(marks);
+      return { ...s, marks };
+    });
+  }, []);
+
   const unpair = useCallback(async () => {
     eventsRef.current?.close();
     clientRef.current = null;
     await clearSession();
-    setState({ status: "unpaired", serverName: "", bots: [], groups: [], connected: false, threads: {} });
+    setState({ status: "unpaired", serverName: "", bots: [], groups: [], connected: false, threads: {}, marks: {} });
   }, []);
 
   const value = useMemo<FleetState & FleetActions>(
@@ -334,9 +354,10 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
       markRead,
       answerCard,
       dismissCard,
+      setMark,
       unpair,
     }),
-    [state, connect, refresh, openThread, loadOlder, sendText, interrupt, markRead, answerCard, dismissCard, unpair],
+    [state, connect, refresh, openThread, loadOlder, sendText, interrupt, markRead, answerCard, dismissCard, setMark, unpair],
   );
 
   return <FleetContext.Provider value={value}>{children}</FleetContext.Provider>;

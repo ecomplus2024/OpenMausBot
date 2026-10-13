@@ -9,7 +9,9 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Avatar } from "../../components/Avatar";
 import { useFleet } from "../../lib/store";
 import type { WireBot } from "../../lib/types";
 
@@ -21,24 +23,50 @@ function preview(bot: WireBot): string {
   return last.text ?? "";
 }
 
+function timeLabel(at?: number): string {
+  if (!at) return "";
+  const d = new Date(at);
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
+}
+
 function Row({ bot }: { bot: WireBot }) {
+  const { marks } = useFleet();
+  const mark = marks[bot.id];
+  const last = bot.messages?.[bot.messages.length - 1];
   return (
     <Pressable style={styles.row} onPress={() => router.push(`/thread/${bot.threadId}`)}>
-      <View style={[styles.avatar, { backgroundColor: bot.color ?? "#888" }]}>
-        <Text style={styles.avatarText}>{bot.name.slice(0, 1).toUpperCase()}</Text>
-      </View>
+      <Avatar
+        name={bot.name}
+        color={mark?.color ?? bot.color}
+        shape={mark?.shape}
+        size={52}
+        online={bot.busy}
+      />
       <View style={styles.rowBody}>
         <View style={styles.rowTop}>
           <Text style={styles.name} numberOfLines={1}>
             {bot.name}
           </Text>
-          {bot.busy ? <Text style={styles.busy}>working…</Text> : null}
+          {bot.title ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText} numberOfLines={1}>
+                {bot.title}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.preview} numberOfLines={1}>
           {preview(bot)}
         </Text>
       </View>
-      {bot.unread ? <View style={styles.unread} /> : null}
+      <View style={styles.rowRight}>
+        <Text style={styles.time}>{timeLabel(last?.at)}</Text>
+        {bot.unread ? <View style={styles.unread} /> : null}
+      </View>
     </Pressable>
   );
 }
@@ -46,12 +74,13 @@ function Row({ bot }: { bot: WireBot }) {
 export default function BotsScreen() {
   const { bots, status, refresh, unpair, serverName } = useFleet();
   const [refreshing, setRefreshing] = React.useState(false);
+  const insets = useSafeAreaInsets();
 
   if (status === "unpaired") return <Redirect href="/pair" />;
 
   if (status === "offline") {
     return (
-      <View style={styles.empty}>
+      <View style={[styles.empty, { paddingTop: insets.top }]}>
         <Text style={styles.emptyTitle}>{serverName || "Computer"} is unreachable</Text>
         <Text style={styles.hint}>Make sure the computer is awake and OpenMausBot is running.</Text>
         <Pressable style={styles.button} onPress={() => void refresh()}>
@@ -65,7 +94,21 @@ export default function BotsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <View style={styles.headerAvatar}>
+          <Text style={styles.headerAvatarText}>{(serverName || "O").slice(0, 1).toUpperCase()}</Text>
+        </View>
+        <View style={{ flex: 1 }} />
+        <Pressable style={styles.headerBtn} onPress={() => void refresh()}>
+          <Text style={styles.headerBtnText}>⌕</Text>
+        </Pressable>
+        <Link href="/pair" asChild>
+          <Pressable style={styles.headerBtn}>
+            <Text style={styles.headerBtnText}>＋</Text>
+          </Pressable>
+        </Link>
+      </View>
       <FlatList
         data={bots}
         keyExtractor={(b) => b.id}
@@ -91,36 +134,59 @@ export default function BotsScreen() {
             </View>
           )
         }
-        ItemSeparatorComponent={() => <View style={styles.sep} />}
       />
-      <Link href="/pair" asChild>
-        <Pressable style={styles.repair}>
-          <Text style={styles.repairText}>Pair another computer</Text>
-        </Pressable>
-      </Link>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  row: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
-  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: "#fff", fontWeight: "700", fontSize: 18 },
-  rowBody: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerAvatarText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f4f4f5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerBtnText: { fontSize: 20, color: "#333" },
+  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  rowBody: { flex: 1, minWidth: 0 },
   rowTop: { flexDirection: "row", alignItems: "center", gap: 8 },
-  name: { fontSize: 16, fontWeight: "600", flexShrink: 1 },
-  busy: { fontSize: 12, color: "#0b6bcb" },
-  preview: { color: "#666", marginTop: 2 },
-  unread: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#0b6bcb" },
-  sep: { height: StyleSheet.hairlineWidth, backgroundColor: "#e5e5e5", marginLeft: 70 },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 },
+  name: { fontSize: 16, fontWeight: "600", color: "#111", flexShrink: 1 },
+  badge: {
+    backgroundColor: "#f1f1f3",
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    maxWidth: 130,
+  },
+  badgeText: { fontSize: 11, color: "#888" },
+  preview: { color: "#8a8a8a", fontSize: 14, marginTop: 3 },
+  rowRight: { alignItems: "flex-end", gap: 6 },
+  time: { fontSize: 12, color: "#b0b0b0" },
+  unread: { width: 9, height: 9, borderRadius: 5, backgroundColor: "#22c55e" },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12, backgroundColor: "#fff" },
   emptyTitle: { fontSize: 17, fontWeight: "600" },
   hint: { color: "#777", textAlign: "center" },
-  button: { backgroundColor: "#0b6bcb", borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
+  button: { backgroundColor: "#111", borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
   buttonText: { color: "#fff", fontWeight: "600" },
   link: { padding: 8 },
-  linkText: { color: "#0b6bcb" },
-  repair: { padding: 14, alignItems: "center", borderTopWidth: StyleSheet.hairlineWidth, borderColor: "#e5e5e5" },
-  repairText: { color: "#0b6bcb" },
+  linkText: { color: "#111", textDecorationLine: "underline" },
 });

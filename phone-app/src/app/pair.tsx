@@ -124,32 +124,38 @@ export default function PairScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.form}>
-          <Text style={styles.title}>Pair manually</Text>
-          <Text style={styles.hint}>
-            On the computer: Settings → Remote access → Other ways to connect.
-          </Text>
+          <View style={styles.formHeader}>
+            <Pressable onPress={() => setManual(false)} hitSlop={8} style={styles.backBtn}>
+              <Text style={styles.backIcon}>‹</Text>
+            </Pressable>
+            <Text style={styles.formTitle}>Pair a new bot</Text>
+          </View>
+          <Text style={styles.label}>Bot link</Text>
           <TextInput
             style={styles.input}
-            placeholder="Computer address (host:port or https://…)"
+            placeholder="https://bot.example.com or host:port"
+            placeholderTextColor="#b0b0b4"
             autoCapitalize="none"
             autoCorrect={false}
             value={manualAddress}
             onChangeText={setManualAddress}
           />
+          <Text style={styles.label}>Code</Text>
           <TextInput
             style={styles.input}
             placeholder="Six-digit code"
+            placeholderTextColor="#b0b0b4"
             keyboardType="number-pad"
             maxLength={6}
             value={manualCode}
             onChangeText={setManualCode}
           />
+          <Text style={styles.formHint}>
+            On the computer: Settings → Remote access → Other ways to connect.
+          </Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable style={styles.button} onPress={submitManual} disabled={busy}>
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Pair</Text>}
-          </Pressable>
-          <Pressable onPress={() => setManual(false)} style={styles.link}>
-            <Text style={styles.linkText}>Scan a QR instead</Text>
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Pair bot</Text>}
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -208,21 +214,29 @@ const styles = StyleSheet.create({
   error: { color: "#ff9b9b", textAlign: "center", marginTop: 8 },
   link: { marginTop: 12, padding: 8 },
   linkText: { color: "#8ecbff", fontSize: 15 },
-  form: { flex: 1, justifyContent: "center", padding: 24, gap: 12, backgroundColor: "#fff" },
+  form: { flex: 1, paddingHorizontal: 20, paddingTop: 12, backgroundColor: "#fff" },
+  formHeader: { flexDirection: "row", alignItems: "center", marginBottom: 28 },
+  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", marginLeft: -10 },
+  backIcon: { fontSize: 30, color: "#111" },
+  formTitle: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "700", color: "#111", marginRight: 30 },
+  label: { fontSize: 13, fontWeight: "600", color: "#111", marginBottom: 6, marginTop: 14 },
+  formHint: { color: "#9a9a9e", fontSize: 12, marginTop: 14 },
   input: {
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 10,
+    borderColor: "#e2e2e6",
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: "#111",
+    backgroundColor: "#fff",
   },
   button: {
-    backgroundColor: "#0b6bcb",
-    borderRadius: 10,
-    paddingVertical: 14,
+    backgroundColor: "#111",
+    borderRadius: 14,
+    paddingVertical: 15,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 24,
   },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  buttonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });
