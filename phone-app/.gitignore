@@ -42,3 +42,5 @@ yarn-error.*
 
 # build artifacts
 *.apk
+
+version.json

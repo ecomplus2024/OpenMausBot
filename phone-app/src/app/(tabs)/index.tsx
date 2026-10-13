@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../components/Avatar";
+import { UpdateBanner } from "../../components/UpdateBanner";
 import { useFleet } from "../../lib/store";
 import type { WireBot, WireGroup, WireMessage } from "../../lib/types";
 
@@ -141,6 +142,7 @@ export default function ChatsScreen() {
           </Pressable>
         </Link>
       </View>
+      <UpdateBanner />
       <FlatList
         data={items}
         keyExtractor={(i) => i.key}

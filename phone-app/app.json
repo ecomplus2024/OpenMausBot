@@ -15,6 +15,10 @@
       "package": "com.openmausbot.phone",
       "usesCleartextTraffic": true,
       "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "REQUEST_INSTALL_PACKAGES"
+      ],
+      "versionCode": 1791917095,
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -24,14 +28,23 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "data": [{ "scheme": "openmausbot", "host": "pair" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "openmausbot",
+              "host": "pair"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "extra": {},
     "plugins": [
       "expo-router",
       "expo-secure-store",
