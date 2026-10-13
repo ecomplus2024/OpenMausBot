@@ -97,7 +97,9 @@ export default function PairScreen() {
     const base = /^https?:\/\//i.test(address) ? address : `http://${address}`;
     void finish({
       address: base,
-      token: `omb_pair_${"x".repeat(43)}`, // placeholder — code path below wins
+      // Empty token → redeemPairing sends only `code`. A fake credential
+      // here would win over the code server-side and always be wrong.
+      token: "",
       code,
       endpoints: [{ url: base.replace(/\/$/, ""), kind: "lan", priority: 200 }],
     });

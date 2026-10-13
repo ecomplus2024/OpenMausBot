@@ -125,6 +125,18 @@ try {
   }
   check("pairing redeems a device token", Boolean(paired?.token?.startsWith("omb_")));
 
+  // 3b. the manual path: a fresh window redeemed by six-digit code alone.
+  //     Regression test — a fake `omb_pair_…` credential here would win
+  //     server-side over the code and always come back "not right".
+  const window2 = await (await fetch(`${CONTROL}/pairing`, { method: "POST" })).json();
+  const manual = await redeemPairing(
+    { url: SIDECAR, kind: "lan", priority: 200 },
+    { token: "", code: window2.code },
+    "Smoke Manual",
+    "smoke-request-0002",
+  );
+  check("manual code-only pairing redeems", Boolean(manual?.token?.startsWith("omb_")));
+
   // 4. the authed API through Client
   const session = {
     token: paired.token,
