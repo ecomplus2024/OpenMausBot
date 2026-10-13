@@ -80,10 +80,15 @@ export class Client {
   }
 
   private setEndpoints(endpoints: CompanionEndpoint[]) {
-    const next = endpoints
+    const incoming = endpoints
       .filter((e) => e && typeof e.url === "string")
       .sort((a, b) => a.priority - b.priority);
-    if (!next.length) return;
+    if (!incoming.length) return;
+    // Keep routes the server doesn't advertise — e.g. a self-hosted
+    // Cloudflare URL that paired this device and may be its only way in.
+    const urls = new Set(incoming.map((e) => e.url));
+    const extra = this.session.endpoints.filter((e) => !urls.has(e.url));
+    const next = [...incoming, ...extra].slice(0, 8);
     this.session = { ...this.session, endpoints: next };
     this.active = Math.min(this.active, next.length - 1);
     this.onSessionChange?.(this.session);

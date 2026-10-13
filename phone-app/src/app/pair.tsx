@@ -26,12 +26,18 @@ async function pairAcrossEndpoints(invite: PairingInvite, deviceName: string) {
     try {
       const res = await redeemPairing(endpoint, invite, deviceName, requestId);
       if (!res) continue;
+      // The route that just answered goes first. The server's advertised
+      // list may not include it (a self-managed tunnel it never learned),
+      // and losing it here is an instant "unreachable" after pairing.
+      const rest = (res.endpoints?.length ? res.endpoints : invite.endpoints).filter(
+        (e) => e.url !== endpoint.url,
+      );
       return {
         token: res.token,
         deviceId: res.device.id,
         deviceName: res.device.name,
         serverName: res.serverName,
-        endpoints: res.endpoints?.length ? res.endpoints : invite.endpoints,
+        endpoints: [endpoint, ...rest],
       };
     } catch (error) {
       // A refused credential is fatal for every route — same registry behind all.
@@ -103,7 +109,11 @@ export default function PairScreen() {
       // here would win over the code server-side and always be wrong.
       token: "",
       code,
-      endpoints: [{ url: base.replace(/\/$/, ""), kind: "lan", priority: 200 }],
+      endpoints: [
+        base.startsWith("https:")
+          ? { url: base.replace(/\/$/, ""), kind: "hosted", priority: 0 }
+          : { url: base.replace(/\/$/, ""), kind: "lan", priority: 200 },
+      ],
     });
   }, [manualAddress, manualCode, finish]);
 
