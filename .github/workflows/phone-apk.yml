@@ -1,0 +1,45 @@
+name: Phone app APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "phone-app/**"
+      - ".github/workflows/phone-apk.yml"
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: phone-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: phone-app/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build debug APK
+        working-directory: phone-app/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openmausbot-debug-apk
+          path: phone-app/android/app/build/outputs/apk/debug/app-debug.apk
