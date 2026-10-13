@@ -107,7 +107,7 @@ export default function ThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const threadId = String(id);
   const {
-    threads, bots, groups, marks,
+    threads, bots, groups, marks, imageSource,
     openThread, loadOlder, sendText, interrupt, markRead, answerCard, dismissCard,
   } = useFleet();
   const [draft, setDraft] = useState("");
@@ -156,7 +156,17 @@ export default function ThreadScreen() {
           onPress={() => botId && router.push(`/bot/${botId}`)}
           disabled={!botId}
         >
-          <Avatar name={title || "C"} color={mark?.color ?? (owner as { color?: string })?.color} shape={mark?.shape} size={32} />
+          <Avatar
+            name={title || "C"}
+            color={mark?.color ?? (owner as { color?: string })?.color}
+            shape={mark?.shape}
+            size={32}
+            src={imageSource((owner as { avatarUrl?: string | null })?.avatarUrl)}
+            crop={(owner as { avatarCrop?: "mascot" | "circle" | "rounded" | "square" })?.avatarCrop}
+            zoom={(owner as { avatarZoom?: number })?.avatarZoom}
+            focusX={(owner as { avatarFocusX?: number })?.avatarFocusX}
+            focusY={(owner as { avatarFocusY?: number })?.avatarFocusY}
+          />
           <Text style={styles.headerTitle} numberOfLines={1}>
             {title || "Chat"}
           </Text>

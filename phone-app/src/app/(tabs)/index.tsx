@@ -34,7 +34,7 @@ function timeLabel(at?: number): string {
 }
 
 function Row({ bot }: { bot: WireBot }) {
-  const { marks } = useFleet();
+  const { marks, imageSource } = useFleet();
   const mark = marks[bot.id];
   const last = bot.messages?.[bot.messages.length - 1];
   return (
@@ -45,6 +45,11 @@ function Row({ bot }: { bot: WireBot }) {
         shape={mark?.shape}
         size={52}
         online={bot.busy}
+        src={imageSource(bot.avatarUrl)}
+        crop={bot.avatarCrop}
+        zoom={bot.avatarZoom}
+        focusX={bot.avatarFocusX}
+        focusY={bot.avatarFocusY}
       />
       <View style={styles.rowBody}>
         <View style={styles.rowTop}>

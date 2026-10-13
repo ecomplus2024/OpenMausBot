@@ -11,7 +11,7 @@ import { SHAPES, SWATCHES, type ShapeId } from "../../lib/theme";
  * Marks are device-local — the companion API cannot write a bot's color. */
 export default function BotProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { bots, marks, setMark } = useFleet();
+  const { bots, marks, setMark, imageSource } = useFleet();
   const insets = useSafeAreaInsets();
   const bot = bots.find((b) => b.id === id);
 
@@ -36,7 +36,18 @@ export default function BotProfileScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.hero}>
-          <Avatar name={bot.name} color={color} shape={shape} size={96} online={bot.busy} />
+          <Avatar
+            name={bot.name}
+            color={color}
+            shape={shape}
+            size={96}
+            online={bot.busy}
+            src={imageSource(bot.avatarUrl)}
+            crop={bot.avatarCrop}
+            zoom={bot.avatarZoom}
+            focusX={bot.avatarFocusX}
+            focusY={bot.avatarFocusY}
+          />
           <Text style={styles.name}>{bot.name}</Text>
           {bot.title ? <Text style={styles.title}>{bot.title}</Text> : null}
           {bot.description ? <Text style={styles.description}>{bot.description}</Text> : null}

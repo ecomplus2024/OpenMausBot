@@ -115,6 +115,12 @@ export interface WireBot {
   activity?: string;
   busy?: boolean;
   avatarUrl?: string | null;
+  /** "mascot" = no picture crop (desktop draws the mascot); the others
+   * crop avatarUrl — circle 50%, rounded 22%, square 0. */
+  avatarCrop?: "mascot" | "circle" | "rounded" | "square";
+  avatarZoom?: number;
+  avatarFocusX?: number;
+  avatarFocusY?: number;
   tasks?: WireTask[];
   messages?: WireMessage[];
   hasMore?: boolean;

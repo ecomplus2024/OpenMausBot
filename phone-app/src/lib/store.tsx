@@ -60,6 +60,9 @@ interface FleetActions {
   answerCard(threadId: string, card: OptionCardData, option: string): Promise<void>;
   dismissCard(threadId: string, card: OptionCardData): Promise<void>;
   setMark(botId: string, patch: BotMark): void;
+  /** Authed Image source for an app-owned path like /api/attachments/x.png —
+   * the picture lives behind the same bearer token as the rest of the API. */
+  imageSource(path: string | null | undefined): { uri: string; headers: Record<string, string> } | null;
   unpair(): Promise<void>;
 }
 
@@ -335,6 +338,15 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const imageSource = useCallback((path: string | null | undefined) => {
+    const client = clientRef.current;
+    if (!client || !path) return null;
+    return {
+      uri: `${client.baseUrl}${path}`,
+      headers: { Authorization: `Bearer ${client.session.token}` },
+    };
+  }, []);
+
   const unpair = useCallback(async () => {
     eventsRef.current?.close();
     clientRef.current = null;
@@ -355,9 +367,10 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
       answerCard,
       dismissCard,
       setMark,
+      imageSource,
       unpair,
     }),
-    [state, connect, refresh, openThread, loadOlder, sendText, interrupt, markRead, answerCard, dismissCard, setMark, unpair],
+    [state, connect, refresh, openThread, loadOlder, sendText, interrupt, markRead, answerCard, dismissCard, setMark, imageSource, unpair],
   );
 
   return <FleetContext.Provider value={value}>{children}</FleetContext.Provider>;
