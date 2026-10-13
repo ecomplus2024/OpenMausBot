@@ -15,7 +15,7 @@ protocols:
 # stranded on its installed version.
 publish:
   - provider: github
-    owner: milind-soni
+    owner: ecomplus2024
     repo: OpenMausBot
 
 directories:
