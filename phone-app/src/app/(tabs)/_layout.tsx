@@ -1,32 +1,8 @@
-import { Tabs } from "expo-router";
+import { Stack } from "expo-router";
 import React from "react";
-import { Text } from "react-native";
 
+// Single merged chat list — no tab bar. The (tabs) group name is kept
+// so "/(tabs)" deep links from the pair flow still resolve to index.
 export default function TabsLayout() {
-  return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: "#111",
-        tabBarInactiveTintColor: "#aaa",
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Bots",
-          tabBarLabel: "Bots",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🤖</Text>,
-        }}
-      />
-      <Tabs.Screen
-        name="rooms"
-        options={{
-          title: "Rooms",
-          tabBarLabel: "Rooms",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>👥</Text>,
-        }}
-      />
-    </Tabs>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
