@@ -3,7 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
-  chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync,
+  chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync,
   readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmSync,
   writeFileSync,
 } from "node:fs";
@@ -183,8 +183,25 @@ export async function stageBrowserTarget(root, target, { cacheDirectory = proces
     verifyBrowserBundle(stage, target);
     // Keep the previous complete tree until the new one passes every check.
     const previous = join(scratch, "previous");
-    if (existsSync(destination)) renameSync(destination, previous);
-    try { renameSync(stage, destination); }
+    // Windows: an antivirus scan keeps freshly extracted binaries (chrome.exe)
+    // open far past their write, and renaming a directory while a child is open
+    // fails with EPERM — retry, then fall back to copy+delete.
+    const moveIn = (from, to) => {
+      for (let attempt = 0; ; attempt++) {
+        try { renameSync(from, to); return; }
+        catch (error) {
+          if (error?.code !== "EPERM") throw error;
+          if (attempt >= 60) {
+            cpSync(from, to, { recursive: true });
+            rmSync(from, { recursive: true, force: true });
+            return;
+          }
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+        }
+      }
+    };
+    if (existsSync(destination)) moveIn(destination, previous);
+    try { moveIn(stage, destination); }
     catch (error) {
       if (existsSync(previous)) renameSync(previous, destination);
       throw error;
