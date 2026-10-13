@@ -27,7 +27,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      # ubuntu-latest already ships the Android SDK; no setup-android step needed.
 
       - name: Install dependencies
         run: npm ci
