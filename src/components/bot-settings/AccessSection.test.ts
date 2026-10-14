@@ -2,7 +2,7 @@ import { Children, createElement, isValidElement, type ReactElement, type ReactN
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { StoreProvider, type Bot, type ConfigStatus } from "@/state/store";
+import { StoreProvider, type Bot } from "@/state/store";
 import type { useBotSettingsDerived } from "./useBotSettingsDerived";
 
 const fixture = vi.hoisted(() => ({ dispatch: vi.fn(), mcpError: false, servers: null as null | Array<{ name: string; enabled: boolean }>, config: null as unknown }));
@@ -195,10 +195,7 @@ describe("AccessSection Works on", () => {
     ]);
   });
 
-  it("hides the Boat or VPS choice on My Cloud, whose cloud computers are the plan's", () => {
+  it("offers the Boat or VPS choice", () => {
     expect(render(makeBot())).toContain("Cloud backend");
-    fixture.config = { cloudHome: true } as Partial<ConfigStatus>;
-    expect(render(makeBot())).not.toContain("Cloud backend");
-    expect(render(makeBot({ computer: "cloud" }))).not.toContain("Boat");
   });
 });

@@ -7,7 +7,6 @@ vi.mock("react", async original => ({ ...await original<typeof import("react")>(
 vi.mock("../lib/session", async original => ({ ...await original<typeof import("../lib/session")>(), pairWithCode: f.pair, readSessionState: vi.fn().mockResolvedValue({ kind: "unauthenticated", error: "" }) }));
 vi.mock("../components/DesktopWorkspaceSwitcher", () => ({ DesktopWorkspaceSwitcher: () => null }));
 import { PairPage, pairIntro, pairsAutomatically } from "./PairPage";
-import en from "../locales/en.json";
 
 const code = "ABCD-EFGH-JK23";
 const render = (initialCode: string | null) => { f.effects = []; return renderToStaticMarkup(createElement(PairPage, { initialCode })); };
@@ -26,7 +25,7 @@ it("in the desktop app, a code the link carried connects at once; a browser stil
   expect(pairsAutomatically(null, true)).toBe(false);
 });
 
-it("opening My Cloud from the app needs no click and no code to type", async () => {
+it("opening a server from the app needs no click and no code to type", async () => {
   vi.stubGlobal("window", { ogb: { workspaces: {} } });
   f.pair.mockResolvedValue({ ok: true });
   const html = render(code);
@@ -51,13 +50,7 @@ it("a browser keeps the code in the form for the person to confirm", () => {
   f.effects[0]?.(); expect(f.pair).not.toHaveBeenCalled();
 });
 
-it("My Cloud says where its connection starts, never 'the code shown on the server'", () => {
-  const cloud = pairIntro({ mode: "code", sent: false, email: "", cloudHome: true });
-  // It names the app's own button and Settings section, as they are labelled.
-  expect(cloud).toContain(`choose ${en["cloudHome.connect"]} in the OpenMausBot app`);
-  expect(cloud).toContain(`Settings → ${en["settings.section.cloudAccount"]}`);
-  expect(cloud).toContain("on your Plan page");
-  expect(cloud).not.toContain("shown on the server");
-  expect(pairIntro({ mode: "code", sent: false, email: "", cloudHome: false })).toContain("shown on the server");
-  expect(pairIntro({ mode: "email", sent: true, email: "a@b.test", cloudHome: false })).toContain("a@b.test");
+it("says where the code is shown, and what an emailed code is", () => {
+  expect(pairIntro({ mode: "code", sent: false, email: "" })).toContain("shown on the server");
+  expect(pairIntro({ mode: "email", sent: true, email: "a@b.test" })).toContain("a@b.test");
 });

@@ -53,7 +53,7 @@ lists its tools.
   app registered in advance, add that app as described below. A 401 without
   sign-in details keeps the old message: check the address and headers.
 - **Where you can sign in.** Anywhere you use OpenMausBot: on the computer
-  it runs on, or in a browser on another computer (My Cloud, a hosted
+  it runs on, or in a browser on another computer (a hosted
   workspace, a server of your own). See below.
 - **Bots never sign in.** A server that needs sign-in is left out of every
   turn until someone signs in from this page. A signed-in server gets
@@ -73,7 +73,7 @@ On the computer OpenMausBot runs on, your browser returns to it at
 `127.0.0.1`. In a browser on another computer that address is your own
 computer, where OpenMausBot is not, so sign-in comes back another way:
 
-- **Over https (My Cloud, a hosted workspace, a server behind https).** When
+- **Over https (a hosted workspace, a server behind https).** When
   the server lets apps register themselves, your browser returns to the
   address you are using OpenMausBot at, at `/mcp-oauth/callback`, and the tab
   says **Signed in. You can close this tab and return to OpenMausBot.** Nothing

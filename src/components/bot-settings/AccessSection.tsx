@@ -531,7 +531,7 @@ export function AccessSection({
   } = derived;
   const browserInstallable = state.config?.browserEngine?.installable === true;
   const { capabilities } = useDesktopCapabilities();
-  const placeSeat = usePlaceSeat(state.config, capabilities.host?.platform ?? "other");
+  const placeSeat = usePlaceSeat(capabilities.host?.platform ?? "other");
   const worksOn = placeViewFor(placeFacts({
     bot, place: bot.computer ?? "auto", seat: placeSeat, config: state.config, instances: state.instances,
   }));
@@ -572,7 +572,7 @@ export function AccessSection({
         >
           {t("place.action.openComputerPanel")}
         </button>
-        {(!bot.computer || bot.computer === "cloud") && !state.config?.cloudHome && (
+        {(!bot.computer || bot.computer === "cloud") && (
           <>
             {!bot.computer && (
               <div className="mt-3 rounded-lg bg-inset px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-secondary">

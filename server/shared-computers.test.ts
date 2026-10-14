@@ -163,7 +163,7 @@ describe("status for the next step's placement", () => {
     await vi.advanceTimersByTimeAsync(40_001); // the Mac went to sleep
     expect(broker.status(alice.person)).toMatchObject([{ id: mac.id, online: false }]);
     expect(broker.list(alice.person)).toEqual([]);
-    live = false; // the Mac's session was revoked on the Cloud
+    live = false; // the Mac's session was revoked on the server
     expect(broker.status(alice.person)).toEqual([]);
     broker.close();
   });

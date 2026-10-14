@@ -355,10 +355,6 @@ const onboardingConfigSchema = z.object({
   version: z.number().int().min(0).max(1000).optional(),
   reelSeen: z.boolean().optional(),
   hintsSeen: z.array(z.string().trim().min(1).max(60)).max(100).optional(),
-  /** OMB Cloud home only: when a bot's turn first finished on this machine
-   * (cloud-home.ts firstCloudTurnPatch). Written by the server, read by the
-   * Cloud's setup checklist. */
-  firstTurnAt: z.string().trim().max(40).optional(),
 }).strict();
 const instanceConfigSchema = z.object({
   driver: z.string().min(1),
@@ -1125,7 +1121,7 @@ export function loadConfig(): AppConfig {
   if (process.env.OPENCODE_API_KEY !== undefined) cfg.opencodeGo.apiKey = process.env.OPENCODE_API_KEY;
   cfg.tts = { ...cfg.tts };
   if (process.env.OMB_TTS_KEY !== undefined) cfg.tts.key = process.env.OMB_TTS_KEY;
-  // A preset ElevenLabs voice (Cloud Pro sets one) is only a default: a voice or
+  // A preset ElevenLabs voice from the environment is only a default: a voice or
   // another speech provider the person picked in Settings always wins.
   const presetVoice = process.env.OMB_TTS_DEFAULT_VOICE?.trim();
   if (presetVoice && !cfg.tts.voice?.trim() && (cfg.tts.provider ?? "elevenlabs") === "elevenlabs") cfg.tts.voice = presetVoice;
@@ -1251,14 +1247,6 @@ export const WORKSPACE_CREDENTIAL_ENV = [
   "OMB_OPENAI_LIVE_KEY",
   "COMPOSIO_API_KEY",
   "OMB_COMPOSIO_BROKER_TOKEN",
-  // Cloud Pro's included Boat, voice and decision relay tokens
-  // (included-services.ts), used only in-process by the Boat, voice and
-  // decider modules, and the trial's Claude credit token, which reaches only
-  // its own chat engine (cloud-credit-provider.ts), in memory.
-  "OMB_CLOUD_BOAT_TOKEN",
-  "OMB_CLOUD_VOICE_TOKEN",
-  "OMB_CLOUD_DECIDER_TOKEN",
-  "OMB_CLOUD_AI_TOKEN",
   // Harness-private filesystem hints are not credentials themselves, but
   // exposing them to a shell-capable agent points straight at app-owned
   // state. The built-in browser master is delivered privately in memory.

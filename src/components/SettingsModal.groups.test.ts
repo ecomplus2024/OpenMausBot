@@ -105,12 +105,12 @@ describe("Settings rail groups", () => {
     expect(SETTINGS_GROUPS.map((group) => group.id)).toEqual(["you", "ai", "computers", "account"]);
     const ids = SECTIONS.map((entry) => entry.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toHaveLength(18); // 16 + the shared Skills library (AI group) + Logins (Computers)
+    expect(ids).toHaveLength(17);
     for (const entry of SECTIONS) expect(SETTINGS_GROUPS.map((group) => group.id)).toContain(entry.group);
   });
 
   it("shows every desktop page under its labelled group", () => {
-    vi.stubGlobal("window", { ogb: { environments: {}, organization: {}, cloudAccount: {} } });
+    vi.stubGlobal("window", { ogb: { environments: {}, organization: {} } });
     const html = render();
     for (const label of ["You", "AI", "Computers", "Account"]) expect(html).toContain(`>${label}</div>`);
     expect(html).toContain("glass-surface");
@@ -118,7 +118,7 @@ describe("Settings rail groups", () => {
       you: ["general", "appearance", "companion"],
       ai: ["engines", "connections", "decisionModel"],
       computers: ["desktopWorkspaces", "computer", "logins"],
-      account: ["cloudAccount", "organization", "usage", "backups", "experimental"],
+      account: ["organization", "usage", "backups", "experimental"],
     });
     // the narrow-window picker carries the same groups
     expect(html).toContain('<optgroup label="AI">');
@@ -130,11 +130,10 @@ describe("Settings rail groups", () => {
     expect(groups.account).toEqual(["usage", "backups", "people", "activity", "experimental"]);
     // desktop-only pages stay out of a browser
     expect(Object.values(groups).flat()).not.toContain("desktopWorkspaces");
-    expect(Object.values(groups).flat()).not.toContain("cloudAccount");
   });
 
   it("shows a paired remote client only Appearance, Remote access and Servers", () => {
-    vi.stubGlobal("window", { ogb: { remoteClient: { active: true }, environments: {}, organization: {}, cloudAccount: {} } });
+    vi.stubGlobal("window", { ogb: { remoteClient: { active: true }, environments: {}, organization: {} } });
     expect(rail(render())).toEqual({ you: ["appearance", "companion"], computers: ["desktopWorkspaces"] });
   });
 

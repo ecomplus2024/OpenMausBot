@@ -82,10 +82,6 @@ export interface UpkeepDeps {
   restoreTurn?: (botId: string, threadId: string, turnId: string) => CaptureTurn | null;
   quietMs: () => number;
   tidyHour: () => number;
-  /** Wraps each synchronous burst of writes this makes to one bot's memory
-   * (capture, organize, tidy), so the host can tell them from writes made
-   * elsewhere (an OMB Cloud home: server/lending-memory.ts). */
-  writing?: <T>(botId: string, write: () => T) => T;
   now?: () => Date;
   log?: (line: string) => void;
 }
@@ -273,8 +269,6 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
     return promise;
   };
 
-  const writing = deps.writing ?? (<T>(_botId: string, write: () => T): T => write());
-
   async function capture(batch: CaptureBatch): Promise<CaptureReport> {
     const bot = deps.bot(batch.botId);
     const at = now().getTime();
@@ -312,7 +306,7 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
     // From here to the journal rows there is no await, so no write interleaves.
     if (!upkeepEnabled(deps.bot(bot.id))) return off;
     if (!allowed()) return refused;
-    const { parsed, added, topics } = writing(bot.id, () => {
+    const { parsed, added, topics } = (() => {
       const before = readRaw(bot.id, "MEMORY.md");
       const archiveBefore = readRaw(bot.id, ARCHIVE_PATH);
       const parsed = parseCandidates(answer, today);
@@ -357,7 +351,7 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
         topics += lines.length;
       }
       return { parsed, added, topics };
-    });
+    })();
     // Only the owner's own words reach About me: on a shared workspace
     // another person's facts are not the owner's profile. Every parsed fact
     // counts, not only new ones — the bot may already have noted it in its
@@ -412,7 +406,7 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
     saved.bots[botId] = { ...saved.bots[botId], core: [...new Set([...(saved.bots[botId]?.core ?? []), ...judgedCore])].slice(-MAX_CORE) };
     saveState(saved);
     if (!moves.length) return 0;
-    return writing(botId, () => {
+    return (() => {
       const { byTopic } = applyMoves(before, moves);
       const written = new Set<string>();
       const existing = new Map(listMemoryTopics(botId).map((topic) => [topic.name.toLowerCase(), topic.name]));
@@ -442,7 +436,7 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
       recordMemoryChange(botId, { path: "MEMORY.md", actor: "upkeep", via: "organize", before, after: readRaw(botId, "MEMORY.md") });
       log(`memory upkeep: moved ${count} entr${count === 1 ? "y" : "ies"} from MEMORY.md into topic files for ${deps.bot(botId)?.name ?? botId}`);
       return count;
-    });
+    })();
   }
 
   function appendArchive(botId: string, archived: readonly string[]): void {
@@ -491,10 +485,8 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
       // The archive is written first: a line is never out of MEMORY.md
       // before it is in the archive, and the newest journal row — the one a
       // person undoes — is MEMORY.md, whose undo brings the line back.
-      writing(botId, () => {
-        if (archived.length) appendArchive(botId, archived);
-        writeMemoryFile(botId, text);
-      });
+      if (archived.length) appendArchive(botId, archived);
+      writeMemoryFile(botId, text);
       recordMemoryChange(botId, { path: "MEMORY.md", actor: "upkeep", via: "tidy", before, after: readRaw(botId, "MEMORY.md") });
     }
     // Topic files get the two steps that need no model: expired lines to the
@@ -509,10 +501,8 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
       const topicPlan = planTidy(topicBefore, today);
       if (!planChanges(topicPlan)) continue;
       const tidied = applyTidy(topicBefore, topicPlan, today);
-      writing(botId, () => {
-        if (tidied.archived.length) appendArchive(botId, tidied.archived);
-        writeMemoryTopic(botId, topic.name, tidied.text);
-      });
+      if (tidied.archived.length) appendArchive(botId, tidied.archived);
+      writeMemoryTopic(botId, topic.name, tidied.text);
       recordMemoryChange(botId, { path, actor: "upkeep", via: "tidy", before: topicBefore, after: readRaw(botId, path) });
       topicExpired += topicPlan.expired.length;
       topicDuplicates += topicPlan.duplicates.length;

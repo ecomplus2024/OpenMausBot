@@ -19,10 +19,10 @@ function render(state: UpdaterState, window: object = { ogb: { updater: {} } }, 
 }
 
 const LOCAL = "http://127.0.0.1:8799";
-const CLOUD = "https://home-7f3k2.fly.dev";
+const HOME = "https://home.example.test";
 const OTHER = "https://bots.example.test";
 /** The window.ogb that electron/preload.cjs gives a server's page; `answered`:
- * whether main answers that page about updates (My Cloud's, not another's). */
+ * whether main answers that page about updates (the app on it, not another's). */
 function serverPageBridge(origin: string, answered: boolean) {
   let bridge: unknown;
   vm.runInNewContext(readFileSync(new URL("../../electron/preload.cjs", import.meta.url), "utf8"), {
@@ -42,17 +42,10 @@ function serverPageBridge(origin: string, answered: boolean) {
 }
 
 describe("UpdateBanner", () => {
-  it("shows the ready update and its restart on My Cloud's page", () => {
-    const html = render({ status: "downloaded", version: "0.2.0" }, { location: { origin: CLOUD }, ogb: serverPageBridge(CLOUD, true) });
-    expect(html).toContain("OpenMausBot 0.2.0 is ready");
-    expect(html).toContain("Restart to update");
-    expect(html).toContain("Later");
-  });
-
-  it("is absent from another server's page, which never gets the updater", () => {
-    const ogb = serverPageBridge(OTHER, false) as { updater?: unknown };
+  it.each([HOME, OTHER])("is absent from a remote server's page, which never gets the updater: %s", (origin) => {
+    const ogb = serverPageBridge(origin, false) as { updater?: unknown };
     expect(ogb.updater).toBeUndefined();
-    expect(render({ status: "downloaded", version: "0.2.0" }, { location: { origin: OTHER }, ogb })).toBe("");
+    expect(render({ status: "downloaded", version: "0.2.0" }, { location: { origin }, ogb })).toBe("");
   });
 
   // Updates download by themselves: nothing to do yet, so nothing to show.

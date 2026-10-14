@@ -6,8 +6,7 @@
 // lands in a conversation's history, and the prompt reaches only the
 // provider the bot already uses.
 //
-// Isolation, all in argv so the same call runs on a desktop, a server and a
-// Cloud home:
+// Isolation, all in argv so the same call runs on a desktop or a server:
 //   - the person's config.toml is not loaded (`--ignore-user-config`): none
 //     of their MCP servers, plugins, notify program or profiles start. Codex
 //     still signs in from the same CODEX_HOME, so the account is the turn's;

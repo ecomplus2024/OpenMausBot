@@ -15,7 +15,7 @@ import type { ApprovalMode } from "../../shared/approval-mode.ts";
 /** Where the work ultimately started. Immutable down the whole tree. */
 export type OriginKind = "person" | "routine" | "outside";
 /** The concrete source behind an outside origin, for framing and audit. */
-export type OriginSource = "chat" | "routine" | "webhook" | "relay" | "external_runtime" | "guest" | "peer" | "api";
+export type OriginSource = "chat" | "routine" | "webhook" | "relay" | "external_runtime" | "peer" | "api";
 
 export interface Origin {
   kind: OriginKind;
@@ -25,8 +25,8 @@ export interface Origin {
   /** The person's own request, harness-quoted (at most 400 characters), when
    * kind is "person". Never model text. */
   quote?: string;
-  /** Who the work is for when a bot acts for a named person (Cloud guest,
-   * external interface with an identity). */
+  /** Who the work is for when a bot acts for a named person (an external
+   * interface with an identity). */
   onBehalfOf?: string;
 }
 

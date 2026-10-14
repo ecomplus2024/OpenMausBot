@@ -467,11 +467,9 @@ const autoUnavailableFor = (process.env.FAKE_CLAUDE_AUTO_UNAVAILABLE_MODELS ?? "
 const permissionMode =
   requestedPermissionMode === "auto" && autoUnavailableFor.includes(model) ? "default" : requestedPermissionMode;
 // The built-in tools init reports, as the real CLI does: --tools when given,
-// else its default set. FAKE_CLAUDE_KEEP_BASH=1 plays a CLI that keeps Bash
-// whatever it was told.
+// else its default set.
 const toolsFlag = argAfter("--tools");
-const tools = [...new Set([...(toolsFlag ? toolsFlag.split(",") : ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebFetch", "WebSearch"]),
-  ...(process.env.FAKE_CLAUDE_KEEP_BASH === "1" ? ["Bash"] : [])])];
+const tools = [...new Set(toolsFlag ? toolsFlag.split(",") : ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebFetch", "WebSearch"])];
 /** The launch files, as the first turn read them (FAKE_CLAUDE_DUMP). */
 let launchFiles: Record<string, unknown> | null = null;
 let turnRunning = false;

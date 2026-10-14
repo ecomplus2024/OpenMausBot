@@ -19,7 +19,6 @@ import { codexConfigMcpServerNames, mountedMcpServerName } from "./codex-mcp-nam
 import { DATA_DIR, stripWorkspaceCredentialEnv } from "../config.ts";
 import { laterStartup, openStartupModelCatalog, writeStartupModelCache } from "../startup-model-catalog.ts";
 import { hostedWorkspaceConfigured } from "../enterprise.ts";
-import { cloudHomeConfigured } from "../cloud-home.ts";
 import { serverVersion } from "../environment.ts";
 import { ChatGptPlanAuthController } from "./chatgpt-plan-auth.ts";
 import { describeSpawnFailure, execCli, killCliTree, spawnCli } from "../procs.ts";
@@ -358,18 +357,6 @@ function mcpAppApprovalForm(params: unknown): McpApprovalForm | null {
   return { tool, summary: message, allowResult: { action: "accept", content } };
 }
 
-/** What a guest-driven turn's app-server starts with: the shell, unified
- * exec and image reads off (codex-cli 0.159.0 `features`), web search too. */
-export const GUEST_CONFINED_CODEX_ARGS = [
-  "-c", "features.shell_tool=false", "-c", "features.unified_exec=false", "-c", "features.view_image=false", "-c", 'web_search="disabled"',
-] as const;
-
-/** Whether the effective config (config/read) shows the shell turned off. */
-export function codexShellDisabled(config: unknown): boolean {
-  const features = plainRecord(plainRecord(config)?.features);
-  return features?.shell_tool === false && features?.unified_exec === false && features?.view_image === false;
-}
-
 /** Thread-config overrides that add `patterns` to the person's shell
  * exclusions, given the effective shell_environment_policy (config/read).
  * Codex keeps two representations: the legacy `exclude`/`include_only`
@@ -665,7 +652,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
   async create(input: DriverCreateInput<CodexConfig>): Promise<ProviderInstance> {
     const { instanceId, config } = input;
     const plan = config.authMode === "chatgpt-plan";
-    const planUnavailable = plan && (hostedWorkspaceConfigured() || cloudHomeConfigured())
+    const planUnavailable = plan && hostedWorkspaceConfigured()
       ? "ChatGPT plan sign-in for hosted Pro requires OpenAI's hosted-app approval. Use a Company model or API key until that integration is approved; the local desktop flow cannot be used here."
       : undefined;
     // Provider homes are excluded from portable backups and Move to Cloud.
@@ -867,11 +854,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         const appServerArgs = ["app-server", ...(plan ? chatgptPlanCodexArgs() : config.managed ? managedCodexArgs(config.managed) : codexLocalProviderArgs(env, turn.model)), ...codexToolSurfaceArgs(),
           // Native snapshots can restore inherited variables after the shell
           // policy has filtered them. Scoped MCP gate settings must stay private.
-          ...(turn.toolScope === undefined ? [] : ["-c", "features.shell_snapshot=false"]),
-          // A guest-driven turn (SendTurnInput.guestConfined): no shell and
-          // no file reads, whatever the person's own config says (-c wins
-          // over config files). The turn also starts with no environment.
-          ...(turn.guestConfined ? GUEST_CONFINED_CODEX_ARGS : [])];
+          ...(turn.toolScope === undefined ? [] : ["-c", "features.shell_snapshot=false"])];
         // What the environment holds before any MCP mount writes to it, and
         // every name the mounts write.
         const baseEnv = new Map(Object.entries(env).filter(([, value]) => value !== undefined));
@@ -1841,11 +1824,6 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
             }
           }
         }
-        // Proven before the turn starts: a Codex that did not take the
-        // overrides runs nothing for a guest.
-        if (turn.guestConfined && !codexShellDisabled(effectiveConfig)) {
-          throw new Error(`This Codex could not turn its shell off, so it can't run this turn. Update Codex, or switch this bot to Claude.${turn.confinedWhy ? ` ${turn.confinedWhy}` : ""}`);
-        }
         // Only the stable half of the prompt belongs in the developer slot:
         // it is the part that must survive compaction unchanged, and any
         // change to it invalidates the provider's cached prefix. The volatile
@@ -1943,7 +1921,6 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
               model: selection.model,
               ...(selection.modelProvider ? { modelProvider: selection.modelProvider } : {}),
               ...approvalParams.thread,
-              ...(turn.guestConfined ? { environments: [] } : {}),
               ephemeral: false,
             });
           let started;
@@ -1991,10 +1968,6 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
             threadId: codexThreadId,
             input: turnInput,
             ...approvalParams.turn,
-            // No environment: no exec_command, apply_patch or view_image, and
-            // any call to them is refused (probed against codex-cli 0.159.0).
-            // Without the experimental API the field is rejected, not ignored.
-            ...(turn.guestConfined ? { environments: [] } : {}),
             // Spread, not `effort: turn.effort ?? null`. Probed against
             // codex-cli 0.146.0: null is indistinguishable from an absent key
             // — both leave the thread's current effort alone, emitting no
@@ -2200,8 +2173,6 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
       provider: DRIVER_KIND,
       capabilities: {
         sessionModelSwitch: "unsupported",
-        // A guest's turn runs with no environment and the shell off (guestConfined).
-        guestTurns: "confined",
         queueing: true,
         computerMcp: true,
         localComputerMcp: true,

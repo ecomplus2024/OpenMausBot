@@ -3,7 +3,7 @@
 // the person registered for this server or else register as a public
 // client when the server allows it, run PKCE through the person's browser,
 // then keep the tokens fresh. The browser comes back to a loopback listener
-// on this machine; a browser on another computer (My Cloud, a hosted
+// on this machine; a browser on another computer (a hosted
 // workspace) comes back to this server's own https address instead, and
 // where it cannot, the person pastes the address the browser ended on.
 // Engines never see this: they get an ordinary Authorization header.
@@ -133,7 +133,7 @@ function httpsOrigin(value: string | null | undefined): string | null {
  * comes back to after approving a sign-in, or null for the loopback
  * callback. `browserOrigin` is the origin that browser proved it is using
  * (its Origin header, equal to the request's own origin); `configured` are
- * this server's public addresses (a Cloud home's, a hosted workspace's, a
+ * this server's public addresses (a hosted workspace's, a
  * connected domain, OMB_PUBLIC_URL). The browser's own origin wins when it
  * is one of them or none is set; otherwise the first configured one does,
  * never a Host header nobody vouched for. */

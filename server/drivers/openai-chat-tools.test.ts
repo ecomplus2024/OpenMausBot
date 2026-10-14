@@ -207,7 +207,6 @@ describe("approvals that follow the other engines", () => {
     const calls = [
       toolCall("audit_write", '{"name":"one","value":"1"}', "call_1"), toolCall("audit_write", '{"name":"two","value":"2"}', "call_2"), null,
       toolCall("audit_write", '{"name":"three","value":"3"}', "call_3"), toolCall("audit_fail", '{"name":"four","value":"4"}', "call_4"), null,
-      toolCall("audit_write", '{"name":"guest","value":"g"}', "call_g"), toolCall("audit_write", '{"name":"guest2","value":"g"}', "call_g2"), null,
       toolCall("audit_write", '{"name":"five","value":"5"}', "call_5"), null,
     ];
     const f = await fixture((_body, response, round) => {
@@ -234,19 +233,6 @@ describe("approvals that follow the other engines", () => {
     await f.instance.adapter.respondToRequest(f.threadId, other.requestId!, { behavior: "deny" });
     await f.completed();
 
-    // a guest's turn in the same conversation uses none of the owner's
-    // grants, and an "always" answered there keeps nothing
-    f.recorder.events.splice(0);
-    await f.start({ guestConfined: true });
-    const guest = await f.recorder.until((event) => event.type === "request.opened");
-    expect(guest).toMatchObject({ tool: "audit_write", allowSession: false });
-    expect(await f.instance.adapter.respondToRequest(f.threadId, guest.requestId!, { behavior: "allow", always: true })).toBe("allowed-once");
-    const again = await f.recorder.until((event) => event.type === "request.opened" && event.requestId !== guest.requestId);
-    expect(again).toMatchObject({ tool: "audit_write", allowSession: false });
-    await f.instance.adapter.respondToRequest(f.threadId, again.requestId!, { behavior: "deny" });
-    await f.completed();
-    expect(f.effects().map((effect) => effect.name)).toEqual(["one", "two", "three", "guest"]);
-
     // another conversation keeps nothing
     f.recorder.events.splice(0);
     await f.instance.adapter.sendTurn({ threadId: randomUUID(), text: "Store it here too.", model: "fixture-model", integrations: f.integrations });
@@ -254,7 +240,7 @@ describe("approvals that follow the other engines", () => {
     expect(elsewhere).toMatchObject({ tool: "audit_write" });
     await f.instance.adapter.respondToRequest(elsewhere.threadId, elsewhere.requestId!, { behavior: "deny" });
     await f.completed();
-    expect(f.effects().map((effect) => effect.name)).toEqual(["one", "two", "three", "guest"]);
+    expect(f.effects().map((effect) => effect.name)).toEqual(["one", "two", "three"]);
   });
 });
 

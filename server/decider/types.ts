@@ -21,8 +21,7 @@ export type DeciderFailure =
   /** The master switch is on but this job is switched off. */
   | "job_off"
   /** The request could not be formed: a base URL that is neither https nor
-   * loopback http, a question outside the backend's limits, or, through
-   * Cloud Pro's included token, a request its relay does not accept. */
+   * loopback http, or a question outside the backend's limits. */
   | "misconfigured"
   | "timeout"
   /** The caller's own signal (a Stop) ended the wait. */

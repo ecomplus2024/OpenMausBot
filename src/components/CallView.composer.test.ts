@@ -162,7 +162,7 @@ describe("composer call button", () => {
     expect(fixture.track).toHaveBeenCalledWith("call_started", { driver: "codex", mode: "live" });
   });
 
-  // A server's page (My Cloud) in either app: the call is Live, with no help
+  // A server's page in either app: the call is Live, with no help
   // card and no trip to This computer, which would leave the bot.
   it("is a Live call on a server's page in the Windows app and the Mac app alike", () => {
     fixture.dictation = false;

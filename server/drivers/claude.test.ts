@@ -482,19 +482,18 @@ describe("ClaudeDriver turns (fake CLI)", () => {
   it("refuses an unsupported native selection before launching, even with instance tools and Full access", async () => {
     const dump = join(scratch, "scope-refused.json"); process.env.FAKE_CLAUDE_DUMP = dump;
     await create("echo", {}, { tools: ["Read"], disallowedTools: ["Write"] });
-    await expect(instance.adapter.sendTurn({ threadId: "scope-refused", text: "Must not run", toolScope: { allow: ["native:Read", "native:Write"] }, approvalMode: "full", guestConfined: true })).rejects.toThrow(/native tool selection.*not supported/i);
+    await expect(instance.adapter.sendTurn({ threadId: "scope-refused", text: "Must not run", toolScope: { allow: ["native:Read", "native:Write"] }, approvalMode: "full" })).rejects.toThrow(/native tool selection.*not supported/i);
     expect(existsSync(dump)).toBe(false);
   });
 
-  it("gates every eligible MCP mount while preserving guest and instance restrictions", async () => {
+  it("gates every eligible MCP mount while preserving instance restrictions", async () => {
     const dump = join(scratch, "scope-mcp.json"); process.env.FAKE_CLAUDE_DUMP = dump;
     await create("echo", { FAKE_CLAUDE_VERSION: "2.1.284" }, { tools: ["Read"], disallowedTools: ["Write"] });
-    await instance.adapter.sendTurn({ threadId: "scope-mcp", text: "Fixture", approvalMode: "ask", guestConfined: true, toolScope: { allow: ["native:*", "mcp:agents:list_bots"] }, integrations: {
+    await instance.adapter.sendTurn({ threadId: "scope-mcp", text: "Fixture", approvalMode: "ask", toolScope: { allow: ["native:*", "mcp:agents:list_bots"] }, integrations: {
       agents: { command: "node", args: ["agents"], env: {} }, browser: { command: "node", args: ["browser"], env: {} },
     } });
     await recorder.until((event) => event.type === "turn.completed");
     const seen = JSON.parse(readFileSync(dump, "utf8"));
-    expect(seen.argv).toContain("--restricted");
     expect(seen.argv[seen.argv.indexOf("--disallowedTools") + 1]).toBe("Write");
     expect(seen.mcpConfig.mcpServers).not.toHaveProperty("browser");
     expect(JSON.parse(seen.mcpConfig.mcpServers.agents.env.OMB_GATE_TOOL_SCOPE)).toEqual({ allow: ["native:*", "mcp:agents:list_bots"] });
@@ -745,44 +744,6 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(dumpedPid(healthyDump)).toBe(healthyPid);
     expect(JSON.parse(readFileSync(retryDump, "utf8")).pid).toBe(replacement.pid);
     expect(recorder.events.some((event) => event.type === "turn.retrying")).toBe(false);
-  });
-
-  it("runs a guest's turn on a Cloud home with no command-running tool and no read outside its folder", async () => {
-    await create(undefined, { FAKE_CLAUDE_VERSION: "2.1.284" });
-    expect(instance.adapter.capabilities.guestTurns).toBe("confined");
-    // What a guest could have left in its own folder on an earlier turn.
-    // Inside the scratch folder: its removal waits for the CLI to let go of it (Windows).
-    const folder = mkdtempSync(join(scratch, "guest-folder-"));
-    writeFileSync(join(folder, ".mcp.json"), JSON.stringify({ mcpServers: { planted: { command: "sh", args: ["-c", "id"] } } }));
-    const dump = join(scratch, "dump-guest.json");
-    process.env.FAKE_CLAUDE_DUMP = dump;
-    await instance.adapter.sendTurn({ threadId: "t-guest", text: "hello", approvalMode: "ask", guestConfined: true, cwd: folder,
-      integrations: { browser: { command: process.execPath, args: ["fixture-browser"], env: {} } } });
-    await recorder.until((e) => e.type === "turn.completed");
-    const seen = JSON.parse(readFileSync(dump, "utf8")) as { argv: string[]; settings: any; mcpConfig: any };
-    const after = (flag: string) => seen.argv[seen.argv.indexOf(flag) + 1];
-    expect(seen.argv).toContain("--restricted");
-    expect(after("--tools")).toBe("Read,Grep,Glob,Edit,Write,WebSearch");
-    expect(after("--permission-mode")).toBe("default");
-    expect(seen.settings.permissions).toMatchObject({ blockReadsOutsideWorkingDirectories: true });
-    expect(seen.settings.permissions.deny).toEqual(expect.arrayContaining(["Bash", "PowerShell", "WebFetch"]));
-    // The folder's own servers never mount, and the browser (it can open a
-    // file: address) asks the owner before every call.
-    expect(Object.keys(seen.mcpConfig.mcpServers)).not.toContain("planted");
-    expect(after("--allowedTools").split(",")).not.toContain("mcp__browser");
-    expect(recorder.events.find((e) => e.type === "turn.completed")).toMatchObject({ ok: true });
-  });
-
-  it("stops a guest's turn when the CLI kept a shell, and refuses one too old to confine it", async () => {
-    await create(undefined, { FAKE_CLAUDE_VERSION: "2.1.284", FAKE_CLAUDE_KEEP_BASH: "1" });
-    await instance.adapter.sendTurn({ threadId: "t-kept", text: "hello", approvalMode: "ask", guestConfined: true, confinedWhy: "This routine was made before this update." });
-    await recorder.until((e) => e.type === "turn.completed");
-    expect(JSON.stringify(recorder.events)).toContain("kept its shell, so it can't run this turn. Update Claude Code. This routine was made before this update.");
-    expect(recorder.events.find((e) => e.type === "turn.completed")).toMatchObject({ ok: false });
-    await create(undefined, { FAKE_CLAUDE_VERSION: "2.1.250" });
-    const refused = await instance.adapter.sendTurn({ threadId: "t-old", text: "hello", approvalMode: "ask", guestConfined: true })
-      .then(() => recorder.until((e) => e.type === "turn.completed").then((event) => JSON.stringify(event) + JSON.stringify(recorder.events)), (error: unknown) => String(error));
-    expect(refused).toContain("too old to run this turn without a shell");
   });
 
   it("keeps a workspace Anthropic key set on purpose while still dropping one from the parent env", async () => {

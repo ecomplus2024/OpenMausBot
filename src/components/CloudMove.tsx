@@ -5,19 +5,17 @@ import { activeLocale, t } from "@/lib/i18n";
 import { Card } from "./SettingsPrimitives";
 
 // Copy this computer here (electron/cloud-move.mjs, docs/copy-workspace.md):
-// this computer's workspace to a server the person added, their Cloud
-// included. It runs from Settings → Servers and Settings → OMB Cloud (this
-// computer's own page names the server). A server's own page offers it (its
-// card while empty, the Cloud's setup checklist, its Settings → Backups), and
-// its Copy brings the person to that panel; only the verified Cloud's starts
-// the copy itself. Every one reads main's snapshot through one mapping,
-// moveView, and calls the bridge.
+// this computer's workspace to a server the person added. It runs from
+// Settings → Servers (this computer's own page names the server). A server's
+// own page offers it (its card while empty, its Settings → Backups), and its
+// Copy brings the person to that panel, where the copy is started. Every one
+// reads main's snapshot through one mapping, moveView, and calls the bridge.
 
-const RUNNING = new Set<CloudMoveState["phase"]>(["preparing", "growing", "exporting", "uploading", "checking", "replacing", "restarting"]);
+const RUNNING = new Set<CloudMoveState["phase"]>(["preparing", "exporting", "uploading", "checking", "replacing", "restarting"]);
 // Until the destination starts replacing its workspace, a copy can still stop.
-const CANCELLABLE = new Set<CloudMoveState["phase"]>(["preparing", "growing", "exporting", "uploading", "checking"]);
+const CANCELLABLE = new Set<CloudMoveState["phase"]>(["preparing", "exporting", "uploading", "checking"]);
 const PHASE: Record<string, LocaleKey> = {
-  preparing: "cloudMove.phase.preparing", growing: "cloudMove.phase.growing", exporting: "cloudMove.phase.exporting", uploading: "cloudMove.phase.uploading",
+  preparing: "cloudMove.phase.preparing", exporting: "cloudMove.phase.exporting", uploading: "cloudMove.phase.uploading",
   checking: "cloudMove.phase.checking", replacing: "cloudMove.phase.replacing", restarting: "cloudMove.phase.restarting",
 };
 // One vocabulary: a reason a copy cannot start (moveBlocked) and a failed
@@ -31,7 +29,7 @@ const ERROR: Record<string, LocaleKey> = {
   not_empty: "cloudMove.error.notEmpty", unreachable: "cloudMove.error.unreachable", busy_elsewhere: "cloudMove.error.busyElsewhere",
 };
 // Nothing to try again here: the next step is somewhere else, or later.
-const NO_RETRY = new Set(["shared_workspace", "same_computer", "not_empty", "cloud_grow_unsupported", "too_large", "busy_elsewhere"]);
+const NO_RETRY = new Set(["shared_workspace", "same_computer", "not_empty", "too_large", "busy_elsewhere"]);
 // The next step is the server itself: open it in this window.
 const OPEN = new Set(["restart_timeout", "owner_needed", "access_changed"]);
 // The server has to change first (update, start): ask it again.
@@ -49,7 +47,7 @@ type Destination = NonNullable<CloudMoveState["destination"]>;
 export type MoveActionKind = "start" | "cancel" | "open" | "check" | "dismiss";
 /** One state of a copy, as every place shows it: one sentence, and one next step. */
 export interface MoveView {
-  /** What `{server}` reads as: the name in Settings → Servers ("My Cloud" for the Cloud). */
+  /** What `{server}` reads as: the name in Settings → Servers. */
   server: string;
   running: boolean;
   message: { text: string; tone: "status" | "done" | "error" | "note" } | null;
@@ -61,37 +59,20 @@ export interface MoveView {
 }
 
 /** The person-facing sentence for a failed copy: what happened, and the next step. */
-function errorText(error: NonNullable<CloudMoveState["error"]>, server: string, cloud: boolean): string {
+function errorText(error: NonNullable<CloudMoveState["error"]>, server: string): string {
   const needed = error.neededBytes;
   if (error.code === "cloud_full") {
-    // More than the plan's whole disk: only a larger plan (or, on the largest, we) can take it.
-    if (error.maxBytes !== undefined && needed !== undefined && needed > error.maxBytes) {
-      return t(error.largest ? "cloudMove.error.planFullLargest" : "cloudMove.error.planFull", { needed: formatMoveBytes(needed), max: formatMoveBytes(error.maxBytes) });
-    }
-    // More than the Cloud's disk now, and the Admin does not say it can grow: removing files will not do it.
-    if (cloud && error.maxBytes === undefined && error.volumeBytes !== undefined && needed !== undefined && needed > error.volumeBytes) {
-      return t("cloudMove.error.growUnsupported", { needed: formatMoveBytes(needed) });
-    }
-    // The disk could hold it: what is already there is in the way.
+    // What is already on the server's disk is in the way of this copy.
     return error.freeBytes !== undefined && needed !== undefined
       ? t("cloudMove.error.cloudFull", { server, free: formatMoveBytes(error.freeBytes), needed: formatMoveBytes(needed) })
       : t("cloudMove.error.cloudFullPlain", { server });
   }
-  // This Admin cannot grow the disk for a copy: no "try again".
-  if (error.code === "cloud_grow_unsupported") {
-    return needed !== undefined ? t("cloudMove.error.growUnsupported", { needed: formatMoveBytes(needed) }) : t("cloudMove.error.growUnsupportedPlain");
-  }
-  // It fits the plan's disk, which could not grow for it just now.
-  if (error.code === "cloud_grow_unavailable") {
-    return error.maxBytes !== undefined ? t("cloudMove.error.growUnavailable", { max: formatMoveBytes(error.maxBytes) }) : t("cloudMove.error.cloudFullPlain", { server });
-  }
   if (error.code === "restore_failed") return t("cloudMove.error.notReplaced", { server, detail: error.message });
   if (error.code === "outdated") {
-    if (cloud) return t("cloudMove.error.cloudOutdated");
     return error.destVersion && error.localVersion ? t("cloudMove.error.serverOutdated", { server, dest: error.destVersion, local: error.localVersion })
       : t("cloudMove.error.serverOutdatedPlain", { server });
   }
-  if (error.code === "restart_timeout") return t(cloud ? "cloudMove.error.restartTimeout" : "cloudMove.error.restartTimeoutServer", { server });
+  if (error.code === "restart_timeout") return t("cloudMove.error.restartTimeoutServer", { server });
   // A proxy in front of the server refused even the smallest part.
   if (error.code === "proxy_limit") return t("cloudMove.error.proxyLimit", { server, size: formatMoveBytes(error.partBytes ?? 512 * 1024) });
   const key = ERROR[error.code];
@@ -106,12 +87,12 @@ function actionFor(code: string, failed: boolean, server: string, resumable = fa
   return failed ? { kind: "start", label: resumable ? t("cloudMove.resume") : t("cloudMove.retry") } : null;
 }
 
-/** Before a copy that cannot fit even at the plan's largest disk: say so now. */
-function fitNote(overview: CloudMoveOverview | null, server: string, cloud: boolean): string | null {
+/** Before a copy that cannot fit on the destination's disk: say so now. */
+function fitNote(overview: CloudMoveOverview | null, server: string): string | null {
   const fit = overview?.fit;
   if (fit?.fit !== "never") return null;
   return errorText({ code: "cloud_full", message: "", freeBytes: fit.freeBytes, neededBytes: fit.neededBytes,
-    ...(fit.maxBytes ? { maxBytes: fit.maxBytes } : {}), ...(fit.largest ? { largest: true as const } : {}), ...(fit.volumeBytes ? { volumeBytes: fit.volumeBytes } : {}) }, server, cloud);
+    ...(fit.volumeBytes ? { volumeBytes: fit.volumeBytes } : {}) }, server);
 }
 
 /** After a copy: what is not running yet there, and the phone. */
@@ -123,11 +104,10 @@ export function moveNextSteps(state: CloudMoveState): string[] {
 
 /** The only state → view mapping. `overview` is main's snapshot about one
  * destination, `state` the copy's live state. `onServerPage`: shown on the
- * destination's own page, whose Copy opens this computer's Settings on it
- * (the verified Cloud's starts the copy, only while it is empty). */
+ * destination's own page, whose Copy opens this computer's Settings on it. */
 export function moveView(overview: CloudMoveOverview | null, state: CloudMoveState, { onServerPage = false }: { onServerPage?: boolean } = {}): MoveView {
   const destination: Destination | null | undefined = overview?.destination ?? state.destination;
-  const server = destination?.name || t("cloudMove.thisServer"), cloud = destination?.kind === "cloud";
+  const server = destination?.name || t("cloudMove.thisServer");
   const view = (message: MoveView["message"], action: MoveView["action"], extra: Partial<MoveView> = {}): MoveView =>
     ({ server, running: false, message, next: [], action, resumable: false, ...extra });
   if (RUNNING.has(state.phase)) {
@@ -141,30 +121,26 @@ export function moveView(overview: CloudMoveOverview | null, state: CloudMoveSta
   }
   if (state.phase === "failed" && state.error) {
     const resumable = state.resumable === true;
-    return view({ text: errorText(state.error, server, cloud), tone: "error" }, actionFor(state.error.code, true, server, resumable), { resumable });
+    return view({ text: errorText(state.error, server), tone: "error" }, actionFor(state.error.code, true, server, resumable), { resumable });
   }
   // Nothing under way: why it cannot start (the same words and step as a
   // copy that failed for that reason), or the one way it can.
   const blocked = overview?.blocked;
   if (blocked) {
     const reason = { code: blocked, message: "", destVersion: overview?.cloud?.appVersion ?? undefined, localVersion: overview?.local?.appVersion ?? undefined, other: overview?.busyWith };
-    return view({ text: errorText(reason, server, cloud), tone: "note" }, actionFor(blocked, false, server));
+    return view({ text: errorText(reason, server), tone: "note" }, actionFor(blocked, false, server));
   }
-  const note = fitNote(overview, server, cloud);
+  const note = fitNote(overview, server);
   if (note) return view({ text: note, tone: "note" }, null);
   const has = overview?.cloud && !overview.cloud.empty, previous = overview?.cloud?.previous;
-  // On a server's own page, Copy opens this computer's Settings on that server
-  // (main), where Replace is; only the verified Cloud copies from its own
-  // page, and only while it is empty.
-  if (onServerPage && has && cloud) return view({ text: t("cloudMove.error.notEmpty", { server }), tone: "note" }, null);
   // Swap back keeps one workspace: copying again deletes the one it keeps now.
   const label = onServerPage ? t("cloudMove.suggest.move") : previous ? t("cloudMove.replaceAgain", { server, date: savedAt(previous.createdAt) })
     : has ? t("cloudMove.replace", { server }) : t("cloudMove.start", { server });
   return view(null, { kind: "start", label });
 }
 
-/** Main's snapshot about one destination (`destination`: a saved server's id,
- * or "cloud", from this computer's own page only), kept current by its state
+/** Main's snapshot about one destination (`destination`: a saved server's
+ * id, from this computer's own page only), kept current by its state
  * events. With no bridge it asks nothing (a browser, or a view that does not
  * need it yet). A copy to another server is not this one's to show. */
 export function useCloudMove(bridge: CloudMoveBridge | undefined, destination?: string) {
@@ -254,7 +230,7 @@ function moveButton(view: MoveView, move: CloudMoveHandle, onStart?: () => void)
     onClick={() => { if (action.kind === "start") onStart?.(); move.run(action.kind); }}>{action.label}</button>;
 }
 
-/** Settings → Servers (a saved server's id) and Settings → OMB Cloud ("cloud"). */
+/** Settings → Servers (a saved server's id). */
 export function CloudMoveSettings({ destination, onClose }: { destination: string; onClose?: () => void }) {
   const bridge = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudMove;
   const move = useCloudMove(bridge, destination);
@@ -287,12 +263,12 @@ export function CloudMoveSettings({ destination, onClose }: { destination: strin
   </Card>;
 }
 
-/** The offer on a server's own page, shared by its card, the Cloud's setup
- * checklist and its Settings → Backups: what comes and its size, that
- * sign-ins stay here, the one next step (and Not now where it is an offer),
- * then the copy's progress or what happened. Its Copy opens this computer's
- * Settings on this server, where the person starts the copy (main; the
- * verified Cloud's starts it). Called as a function so each keeps one element tree. */
+/** The offer on a server's own page, shared by its card and its
+ * Settings → Backups: what comes and its size, that sign-ins stay here, the
+ * one next step (and Not now where it is an offer), then the copy's progress
+ * or what happened. Its Copy opens this computer's Settings on this server,
+ * where the person starts the copy. Called as a function so each keeps one
+ * element tree. */
 export function cloudMoveOffer(move: CloudMoveHandle, on: { start?: () => void; notNow?: () => void } = {}) {
   const { overview, state, pending } = move;
   const view = moveView(overview, state, { onServerPage: true });
@@ -313,8 +289,7 @@ export function cloudMoveOffer(move: CloudMoveHandle, on: { start?: () => void; 
 
 /** On a server's own page, the first time it is empty: bring this
  * computer's bots and chats. Not blocking; Not now hides it for good. After
- * a copy it says what came and what is not running there yet, until Done.
- * While the Cloud's setup checklist is up, the offer is one of its steps instead. */
+ * a copy it says what came and what is not running there yet, until Done. */
 export function CloudMoveSuggestion() {
   const bridge = window.ogb?.cloudMove;
   const move = useCloudMove(bridge);

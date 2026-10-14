@@ -1,6 +1,6 @@
 // Auto-update popup — a small card floating bottom-left, driven by the
-// preload's updater bridge (this computer's page and the person's own Cloud
-// page). Renders nothing in the browser/dev (no bridge). Updates download by
+// preload's updater bridge (this computer's page and a remote server's page
+// this app answers for). Renders nothing in the browser/dev (no bridge). Updates download by
 // themselves, so it stays away while one checks, downloads or prepares, and
 // appears only when there is something to do: a restart to apply (always the
 // person's click), a hand-off to finish, or a failure.
@@ -61,7 +61,7 @@ export function UpdateBanner({ sidebarIndicator = false }: UpdateBannerProps) {
 
   const title =
     s.status === "downloaded"
-      ? // named: on My Cloud's page it is this app that restarts, not the Cloud
+      ? // named: on a server's page it is this app that restarts, not the server
         `${brand().name} ${s.version} is ready`
       : installing
         ? handoff

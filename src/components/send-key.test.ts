@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // Settings → Appearance → Send messages with, in every box that sends on
-// Enter: the composer (1:1 and rooms), editing a sent message, a citation's
-// comment and the Cloud's first job; the hints and the tour name it. Ctrl/⌘+Enter
+// Enter: the composer (1:1 and rooms), editing a sent message and a
+// citation's comment; the hints and the tour name it. Ctrl/⌘+Enter
 // always sends, and an input method's confirming Enter never sends nor picks
 // from the composer's menus.
 import { createElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
@@ -27,7 +27,6 @@ vi.mock("./DesktopCapabilities", async (importOriginal) => ({
 }));
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 vi.mock("@/lib/interface-mode", () => ({ useAdvancedMode: () => true, setAdvancedMode: vi.fn() }));
-vi.mock("@/lib/cloud-guest", () => ({ useCanWriteIn: () => null }));
 vi.mock("./CitationUI", async (importOriginal) => ({
   ...await importOriginal<typeof import("./CitationUI")>(),
   CitationSelectionToolbar: () => createElement("span"),
@@ -45,10 +44,8 @@ vi.mock("@/components/onboarding/view-transition", () => ({ withViewTransition: 
 const { Composer } = await import("./Composer");
 const { ChatView } = await import("./ChatView");
 const { CitationBadge } = await import("./CitationUI");
-const { CloudIntent } = await import("./CloudIntent");
 const { GuidedTour } = await import("./onboarding/GuidedTour");
 const { setSendKey } = await import("@/lib/send-key");
-const { setPendingIntent } = await import("@/lib/cloud-intent");
 const { setLocale } = await import("@/lib/i18n");
 const { api } = await import("@/state/store");
 
@@ -172,17 +169,6 @@ describe.each(SEND_KEYS)("in %s mode", (mode) => {
     expect(onChange).toHaveBeenCalledOnce();
     expect(onChange.mock.calls[0]![0]).toMatchObject({ id: "c1", comment: "why" });
   });
-
-  it("the Cloud's first job starts on the same key", () => {
-    setPendingIntent("Watch my inbox");
-    render(createElement(CloudIntent));
-    const job = () => textarea('textarea[aria-label="What should My Cloud do while you\'re away?"]');
-    expect(job().value).toBe("Watch my inbox");
-    const given = () => vi.mocked(api).mock.calls.filter(([, init]) => String(init?.body).includes("cloud-intent-given")).length;
-    expectSendKey(mode, job, given);
-    expect(given()).toBe(1);
-    setPendingIntent(null);
-  });
 });
 
 describe("an input method in the composer's menus", () => {
@@ -252,11 +238,5 @@ describe("the send key in hints", () => {
     setSendKey(mode);
     render(createElement(GuidedTour));
     expect(document.body.textContent).toContain(`Type anything and press ${label}. Every chat`);
-  });
-
-  it("names the key on the Cloud's first-job button", () => {
-    setSendKey("mod-enter");
-    render(createElement(CloudIntent));
-    expect(host.querySelector('button[aria-label="Start setting it up"]')?.getAttribute("title")).toBe("Start setting it up (Ctrl+Enter)");
   });
 });

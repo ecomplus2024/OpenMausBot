@@ -373,7 +373,7 @@ export interface DataContext {
   validateVegaLite: VegaLiteValidator;
   renderer: ChartRenderer;
   /** Folders an export may land in, most preferred first: the bot's working
-   * folder, then the person's Downloads. Both may be absent on a Cloud home. */
+   * folder, then the person's Downloads. Both may be absent on a headless server. */
   exportRoots: () => string[];
   signal: AbortSignal;
   /** The bot's connection for tool calls, the panel's for the person. */

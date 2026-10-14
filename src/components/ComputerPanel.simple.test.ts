@@ -24,7 +24,7 @@ const fixture = vi.hoisted(() => {
     index: 0,
     own: 0,
     seed: {} as Record<string, unknown>,
-    config: {} as FeatureFlagConfig & { cloudHome?: boolean; box?: { configured: boolean } },
+    config: {} as FeatureFlagConfig & { box?: { configured: boolean } },
     instances: [] as InstanceInfo[],
     android: false,
     dispatch: (() => {}) as (...args: unknown[]) => void,
@@ -374,11 +374,6 @@ describe("Where the bot works", () => {
     expect(placeLine(rendered)).not.toMatch(/Local VM|Boat|cloud box/i);
   });
 
-  it("says what Auto does on My Cloud, where it starts a cloud computer by itself", () => {
-    fixture.config = { ...fixture.config, cloudHome: true };
-    expect(placeLine(render(makeBot()))).toBe("Uses the built-in browser. In a chat, it starts its cloud computer by itself when a task needs desktop apps.");
-  });
-
   it("J11: the Advanced cards and the Simple grid name the same problem in the same words", () => {
     fixture.instances = [{ ...engine(), displayName: "Plain", capabilities: { computerMcp: false, browserMcp: true } } as InstanceInfo];
     const simple = render(makeBot());
@@ -396,21 +391,6 @@ describe("Where the bot works", () => {
     expect(card.props.disabled).toBe(true);
     expect(text(card.props.children)).toBe("Cloud computerNot with this model");
     expect(card.props.title).toBe(tile.props.title);
-  });
-
-  it("reads a refused start as the same state a failed row does, never the relay's words", () => {
-    fixture.seed = {
-      phase: "error",
-      resolved: { botId: "scout", threadId: "thread-scout", computer: "cloud", cloudBackend: "box" },
-      error: "Your Personal plan includes 1 cloud computer at once. Delete one to start another.",
-    };
-    const rendered = render(makeBot({ computer: "cloud" }));
-    expect(rendered.html).toContain("All the cloud computers your plan includes are in use.");
-    expect(rendered.html).not.toContain("Delete one to start another");
-    const actions = rendered.nodes.filter((node) => node.props["data-testid"] === "place-action").map((node) => text(node.props.children));
-    expect(actions).toContain("Manage cloud computers");
-    (rendered.nodes.find((node) => node.props["data-testid"] === "place-action")!.props.onClick as () => void)();
-    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true, section: "computer" });
   });
 
   it("offers the one next action for the chosen place, and a User is told to ask an Admin", () => {

@@ -1,7 +1,7 @@
 // Copy this computer here: the receiving server's routes (server/cloud-move.ts,
 // docs/copy-workspace.md). Every server the person adds in the desktop app
-// receives a copy the same way, an OMB Cloud home included; the names stay
-// `cloud-move` so Clouds already running keep answering the desktop.
+// receives a copy the same way; the names stay `cloud-move` so servers
+// already running keep answering the desktop.
 //
 //   GET  /api/cloud-move/estimate   what a copy of this workspace carries (the sending side)
 //   GET  /api/cloud-move            contents, free space, upload, job, previous workspace, version
@@ -47,12 +47,12 @@ export type CloudMoveJob =
   | { kind: "preview" | "restore" | "undo"; state: "failed"; error: string };
 
 /** Shared with other people, so one person's copy must never replace it: a
- * hosted organisation workspace, or (not on a Cloud home, whose sign-in is its
- * owner's OMB Cloud account) an email sign-in list that lets someone else in
- * (sharedSignIn: a member, a second admin, or a whole @domain). The owner's
- * own address alone (`openmausbot access add you@example.com`) is not. */
-export function workspaceShared(input: { hosted: boolean; cloudHome: boolean; signIn: SignInLists }): boolean {
-  return input.hosted || (!input.cloudHome && sharedSignIn(input.signIn));
+ * hosted organisation workspace, or an email sign-in list that lets someone
+ * else in (sharedSignIn: a member, a second admin, or a whole @domain). The
+ * owner's own address alone (`openmausbot access add you@example.com`) is
+ * not. */
+export function workspaceShared(input: { hosted: boolean; signIn: SignInLists }): boolean {
+  return input.hosted || sharedSignIn(input.signIn);
 }
 
 export function createCloudMoveRoutes(options: {

@@ -11,7 +11,7 @@ const TURNS_NEED_MAC: CallCapabilityHelp = {
   reason: "They listen with on-device speech recognition, which only the Mac app has.",
 };
 
-/** The Mac app on a server's page (My Cloud): taking turns works on This
+/** The Mac app on a server's page: taking turns works on This
  * computer, whose page can listen on the Mac. No trip there is offered:
  * leaving would leave the bot being called, and this page's call is Live. */
 const TURNS_ON_THIS_COMPUTER: CallCapabilityHelp = {

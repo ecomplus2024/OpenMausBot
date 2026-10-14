@@ -137,7 +137,7 @@ off. It keeps the notes in shape without the bot having to decide to:
   A room fewer people can see than the bot never feeds it (the same rule as
   the recent-work brief), checked again when the batch is captured, as are
   the switch and the bot's membership. Bot-to-bot channels, room hand-offs,
-  goal runs and, on a Cloud home, every room are left out.
+  goal runs are left out.
   Turns still waiting when the app quits or restarts through its normal
   shutdown are kept as their ids (never their text) in
   `memory-capture-pending.json`, at most 50 chats, and read back from the

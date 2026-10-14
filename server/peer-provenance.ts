@@ -18,7 +18,7 @@
 // is the reader's task, done with its own tools and permissions. Work that
 // started anywhere else — a routine (nothing records whether the person
 // wrote it as it stands: a bot may write its own), a webhook, a relayed
-// line, an external runtime, a Cloud guest, a room (no room line is proven
+// line, an external runtime, a room (no room line is proven
 // yet), a turn nothing proves — does not carry the user's request. Handed
 // on with delegate_bot it keeps the plain direction it always had (it is
 // how routines and connected runtimes hand work on, and what they read is
@@ -75,21 +75,20 @@ export function workOrigin(line: RequestLine | undefined): WorkOrigin {
 }
 
 /** Where a request a conversation admits started, decided once when it is
- * admitted. A routine's or a webhook's run (`trigger`), or a Cloud guest's
- * turn, is never the user's. Otherwise: what a hand-off gave it (a
- * delegation's, a coordinated tree's, a thread the bot opened on itself),
- * else what the request it continues had (a card answer, a wake, a resume
- * after the person acted), else the line that starts it. A continuation
- * passes no line: nothing on a stored line says a routine or a webhook
- * wrote it, so one whose request record moved on proves nothing. */
-export function requestWorkOrigin({ trigger, guest, handed, continued, line }: {
+ * admitted. A routine's or a webhook's run (`trigger`) is never the user's.
+ * Otherwise: what a hand-off gave it (a delegation's, a coordinated tree's,
+ * a thread the bot opened on itself), else what the request it continues
+ * had (a card answer, a wake, a resume after the person acted), else the
+ * line that starts it. A continuation passes no line: nothing on a stored
+ * line says a routine or a webhook wrote it, so one whose request record
+ * moved on proves nothing. */
+export function requestWorkOrigin({ trigger, handed, continued, line }: {
   trigger?: RoutineRunTrigger;
-  guest?: boolean;
   handed?: WorkOrigin;
   continued?: WorkOrigin;
   line?: RequestLine;
 }): WorkOrigin {
-  if (trigger || guest) return OUTSIDE;
+  if (trigger) return OUTSIDE;
   return handed ?? continued ?? workOrigin(line);
 }
 

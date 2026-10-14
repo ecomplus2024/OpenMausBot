@@ -1,11 +1,11 @@
 // Copy this computer here, the desktop's half (docs/copy-workspace.md;
 // server/cloud-move-http.ts is the receiving server's). One action copies this
-// computer's workspace to a server the person owns and added in this app, their
-// OMB Cloud included, by one code path:
+// computer's workspace to a server the person owns and added in this app, by
+// one code path:
 //
 //   1. this computer's server exports its ordinary encrypted workspace backup
 //      (the backup policy decides what travels: never a credential, sign-in,
-//      pairing or session, never this app's Cloud sign-in or lending grants);
+//      pairing or session, never a sharing grant);
 //   2. main copies it to a private temporary file and uploads it to the
 //      destination in parts, continuing where a dropped connection left it;
 //   3. the destination checks it is a valid backup, backs up its own work if it
@@ -13,19 +13,17 @@
 //
 // Main talks to the destination with a session of its own. The destination's
 // `grant()` proves the owner and opens one single-use admin pairing window
-// there: on the Cloud the Admin does (pairHome); on any other server, this
-// window's own owner session mints it (mintOwnerCode). Main redeems it for a
-// bearer token held only in memory, and signs that session out when the copy
-// ends. This computer's data is copied, never changed or deleted. Pure apart
-// from its injected requests, so node tests drive it end to end. The names say
-// "cloud" (`cloud-move`, CloudMove…): the routes must stay for live Clouds.
+// there: this window's own owner session mints it (mintOwnerCode). Main
+// redeems it for a bearer token held only in memory, and signs that session
+// out when the copy ends. This computer's data is copied, never changed or
+// deleted. Pure apart from its injected requests, so node tests drive it end
+// to end.
 import { createHash, randomBytes } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, open, rm } from "node:fs/promises";
 import { isAbsolute, join, parse, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { CLOUD_HOME_NAME } from "./cloud-home.mjs";
 
 const MAGIC = Buffer.from("OMB-WORKSPACE-1\n");
 const MIN_BYTES = MAGIC.length + 16 + 12 + 16;
@@ -37,9 +35,6 @@ const MAX_PART_BYTES = 64 * 1024 ** 2;
 // a part: parts halve down to this before the copy says so.
 const MIN_PART_BYTES = 512 * 1024;
 const SPACE_MARGIN = 256 * 1024 ** 2;
-const GB = 1024 ** 3;
-/** A Cloud whose disk grows does so in steps of this size (openmaus-cloud VOLUME_EXTEND). */
-const DISK_STEP_GB = 10;
 // A failed upload keeps its archive this long, so Try again continues it.
 const REUSE_MS = 30 * 60_000;
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/;
@@ -60,24 +55,14 @@ const defaultSleep = (ms, signal) => new Promise((done, reject) => {
   signal?.addEventListener("abort", abort, { once: true });
 });
 
-/** Whether an IPC sender is the person's own Cloud, open in this window:
- * the main frame of the main window, at exactly the origin the verified Cloud
- * session reports, while that is the window's active server. Only the Cloud's
- * own channels use it (lending, the plan); a copy asks moveSenderDestination. */
-export function cloudPageSenderAllowed(event, { contents, homeOrigin, activeOrigin }) {
-  if (!contents || !homeOrigin || activeOrigin !== homeOrigin) return false;
-  if (event?.sender !== contents || !event.senderFrame || event.senderFrame !== contents.mainFrame) return false;
-  try { return new URL(event.senderFrame.url).origin === homeOrigin; } catch { return false; }
-}
-
 /** Where a copy asked over IPC goes, decided by main, never by the page:
  * - this computer's own page (the main window's main frame, on Local) names a
- *   saved server by `id`, or "cloud" for the person's Cloud home;
+ *   saved server by `id`;
  * - a saved server's own page, open as the window's active server, names
  *   nothing and is answered about itself (`remote: true`).
  * `entry: null`: this computer's page asked without naming one. Anything else
  * (another window, a subframe, a page naming a destination) is null. */
-export function moveSenderDestination(event, { contents, environments, localOrigin, cloudHomeOrigin = null, id }) {
+export function moveSenderDestination(event, { contents, environments, localOrigin, id }) {
   if (!contents || event?.sender !== contents || !event.senderFrame || event.senderFrame !== contents.mainFrame) return null;
   let origin;
   try { origin = new URL(event.senderFrame.url).origin; } catch { return null; }
@@ -86,9 +71,6 @@ export function moveSenderDestination(event, { contents, environments, localOrig
   const named = id !== undefined && id !== null;
   if (!active && localOrigin && origin === localOrigin) {
     if (!named) return { entry: null, remote: false };
-    if (id === "cloud") {
-      return { entry: { ...(saved.find(entry => cloudHomeOrigin && entry.origin === cloudHomeOrigin) ?? { id: "cloud", name: CLOUD_HOME_NAME, origin: cloudHomeOrigin }), cloud: true }, remote: false };
-    }
     const entry = typeof id === "string" ? saved.find(candidate => candidate.id === id) : undefined;
     return entry ? { entry, remote: false } : null;
   }
@@ -115,12 +97,10 @@ export function olderVersion(a, b) {
 }
 
 /** Why a copy to a destination cannot start now, before anything is asked of
- * it, or null: one reason, so each has one message. `refusal`: moveRefusal.
- * The Cloud's Admin opens a session there itself, so no session in this
- * window (or none reachable yet) does not block the Cloud. */
-export function moveBlocked({ kind, refusal = null, local = null, cloud = null, busyElsewhere = false }) {
+ * it, or null: one reason, so each has one message. `refusal`: moveRefusal. */
+export function moveBlocked({ refusal = null, local = null, cloud = null, busyElsewhere = false }) {
   if (busyElsewhere) return "busy_elsewhere";
-  if (refusal && !(kind === "cloud" && (refusal === "owner_needed" || refusal === "unreachable"))) return refusal;
+  if (refusal) return refusal;
   if (local?.environmentId && cloud?.environmentId && local.environmentId === cloud.environmentId) return "same_computer";
   if (olderVersion(cloud?.appVersion, local?.appVersion)) return "outdated";
   return null;
@@ -129,7 +109,7 @@ export function moveBlocked({ kind, refusal = null, local = null, cloud = null, 
 /** Mint a single-use owner pairing code on `origin` with this window's own
  * session there (the cookie the server's /pair page set): it must be a
  * signed-in session with admin scope. The code carries the owner's scopes
- * (admin and client, like the Cloud's): signing the copy's session out
+ * (admin and client): signing the copy's session out
  * needs client scope. `fetchImpl` is the window session's
  * fetch (Chromium's cookie jar); the cookie is never the copy's own
  * credential, because signing that session out would sign the window out. */
@@ -169,25 +149,15 @@ const identity = value => ({
   environmentId: typeof value.environmentId === "string" && /^[\w-]{1,128}$/.test(value.environmentId) ? value.environmentId : null,
 });
 
-/** Whether a move of `localBytes` fits on the Cloud: `now`; once its disk
- * grows (`grow`: a plan whose disk grows as it fills, up to `disk.maxBytes`,
- * with `sizeGb` the size to ask for); or `never`, not even at the plan's
- * largest disk. The room a move needs is the Cloud's own rule (three times
- * the upload while it is checked and installed, and a margin); the Cloud
- * checks again, exactly, before anything is uploaded. */
-export function moveFit({ localBytes, freeBytes, uploadReceived = 0, volumeBytes = null, disk = null }) {
+/** Whether a move of `localBytes` fits on the destination: `now` or `never`.
+ * The room a move needs is the destination's own rule (three times the upload
+ * while it is checked and installed, and a margin); the destination checks
+ * again, exactly, before anything is uploaded. */
+export function moveFit({ localBytes, freeBytes, uploadReceived = 0, volumeBytes = null }) {
   const neededBytes = 3 * localBytes + SPACE_MARGIN, available = freeBytes + uploadReceived;
-  const maxBytes = count(disk?.maxBytes) && disk.maxBytes > 0 ? disk.maxBytes : null;
-  const volume = [volumeBytes, disk?.volumeBytes, disk?.startBytes].find(value => count(value) && value > 0) ?? null;
+  const volume = count(volumeBytes) && volumeBytes > 0 ? volumeBytes : null;
   if (available >= neededBytes) return { fit: "now", neededBytes, freeBytes: available };
-  const room = maxBytes && volume && maxBytes > volume ? maxBytes - volume : 0;
-  if (room > 0 && available + room >= neededBytes) {
-    const sizeGb = Math.min(Math.floor(maxBytes / GB), Math.ceil((volume + neededBytes - available) / GB / DISK_STEP_GB) * DISK_STEP_GB);
-    return { fit: "grow", neededBytes, freeBytes: available, maxBytes, sizeGb };
-  }
-  // What it is up against: the plan's whole disk (`maxBytes`, `largest` on the
-  // top plan) or, when the Admin does not say, this Cloud's disk as it is now.
-  return { fit: "never", neededBytes, freeBytes: available, ...(maxBytes ? { maxBytes, ...(disk?.largest === true ? { largest: true } : {}) } : volume ? { volumeBytes: volume } : {}) };
+  return { fit: "never", neededBytes, freeBytes: available, ...(volume ? { volumeBytes: volume } : {}) };
 }
 export function parseCloudMoveStatus(value) {
   if (!record(value) || !record(value.contents) || !["bots", "rooms", "chats"].every(key => count(value.contents[key])) ||
@@ -197,7 +167,7 @@ export function parseCloudMoveStatus(value) {
   return {
     contents: { bots: value.contents.bots, rooms: value.contents.rooms, chats: value.contents.chats },
     empty: value.empty, freeBytes: value.freeBytes, previous,
-    // The whole volume, from a Cloud that says (null from an older one).
+    // The whole volume, from a server that says (null from an older one).
     volumeBytes: count(value.volumeBytes) && value.volumeBytes > 0 ? value.volumeBytes : null,
     // A stored part of an earlier upload: space the next upload frees first.
     uploadReceived: record(value.upload) && count(value.upload.received) ? value.upload.received : 0,
@@ -231,13 +201,9 @@ const sentence = value => typeof value === "string" && value.trim()
 /** One copy at a time, to one destination; `state()` is what Settings and a
  * server's card show, and carries `destination` ({id, name, origin, kind}).
  * A destination (main's destinationFor) is `{id, name, origin, kind, grant}`:
- * `grant()` opens one single-use admin pairing window there ({origin, code}).
- * Only the Cloud (`kind: "cloud"`) has `disk()`, the disk its plan has and may
- * grow to (cloud-home.mjs cloudPlanDisk), and `grow(sizeGb)`, which asks OMB
- * Cloud to grow it now (cloud-account.mjs growDisk). */
+ * `grant()` opens one single-use admin pairing window there ({origin, code}). */
 export function createCloudMove({ localRequest, fetchImpl = fetch, tempRoot, availableBytes, now = Date.now, sleep = defaultSleep,
-  onState = () => {}, retryDelaysMs = [1_000, 3_000, 8_000, 15_000, 30_000], pollMs = 2_000, restartTimeoutMs = 10 * 60_000, jobTimeoutMs = 3 * 3600_000,
-  growTimeoutMs = 5 * 60_000 }) {
+  onState = () => {}, retryDelaysMs = [1_000, 3_000, 8_000, 15_000, 30_000], pollMs = 2_000, restartTimeoutMs = 10 * 60_000, jobTimeoutMs = 3 * 3600_000 }) {
   if (typeof localRequest !== "function" || typeof tempRoot !== "string" || !isAbsolute(tempRoot) ||
     resolve(tempRoot) === parse(resolve(tempRoot)).root || typeof availableBytes !== "function") throw new Error("A copy needs its requests and a private temporary folder.");
   let value = { phase: "idle" }, running = false, controller = null, committing = false, prepared = null;
@@ -245,9 +211,9 @@ export function createCloudMove({ localRequest, fetchImpl = fetch, tempRoot, ava
   let target = null;
   const state = () => structuredClone(value);
   const publish = next => { value = target ? { ...next, destination: target } : next; try { onState(state()); } catch { /* a closed view must not stop the copy */ } return state(); };
-  // How messages name the destination: the Cloud as "My Cloud", any other server by its name.
-  const there = () => target?.kind === "cloud" ? "My Cloud" : target?.name || "the server";
-  const There = () => target?.kind === "cloud" ? "My Cloud" : target?.name || "The server";
+  // How messages name the destination: by its name.
+  const there = () => target?.name || "the server";
+  const There = () => target?.name || "The server";
   // Byte counts at most four times a second; every step change at once.
   let progressAt = 0;
   const progress = (phase, bytesTransferred, totalBytes) => {
@@ -480,34 +446,10 @@ export function createCloudMove({ localRequest, fetchImpl = fetch, tempRoot, ava
         }
       } else restartBegins();
       if (now() > deadline) {
-        // The Cloud's launcher always starts it again; a server's does when
-        // it is one of ours (server/restart.ts), and otherwise it installs at its next start.
-        fail("restart_timeout", target?.kind === "cloud" ? "My Cloud is taking longer than usual to restart. Check it again in a few minutes."
-          : `${There()} hasn't come back yet. If it doesn't start again on its own, start OpenMausBot there; it finishes installing the copy when it starts.`);
+        // A server restarts itself when it is one of ours (server/restart.ts),
+        // and otherwise it installs at its next start.
+        fail("restart_timeout", `${There()} hasn't come back yet. If it doesn't start again on its own, start OpenMausBot there; it finishes installing the copy when it starts.`);
       }
-    }
-  }
-
-  /** The Cloud only: the plan's disk can hold the copy, but today's disk
-   * cannot. Ask OMB Cloud to grow it now, then wait until the Cloud has the room. */
-  async function makeRoom(dest, session, fit, signal) {
-    publish({ phase: "growing", action: "move" });
-    const details = { freeBytes: fit.freeBytes, neededBytes: fit.neededBytes, maxBytes: fit.maxBytes };
-    let answer = null;
-    // No answer (offline, a slip): trying again later can work.
-    try { answer = await dest.grow(fit.sizeGb); } catch { signal.throwIfAborted(); fail("cloud_grow_unavailable", "My Cloud could not make room for this move just now.", details); }
-    signal.throwIfAborted();
-    // This Admin cannot grow a disk for a move: trying again will not help.
-    if (!answer?.supported) fail("cloud_grow_unsupported", "My Cloud can't make room for a move this size yet.", details);
-    if (answer.refused) fail("cloud_full", "My Cloud does not have enough space for this move.", details);
-    const deadline = now() + growTimeoutMs;
-    for (;;) {
-      await sleep(pollMs, signal);
-      let status = null;
-      // A Cloud whose disk grew may restart: no answer for a moment is expected.
-      try { status = await cloudStatus(session, signal); } catch (error) { if (signal.aborted || error?.code === "access_changed") throw error; }
-      if (status && status.freeBytes + status.uploadReceived >= fit.neededBytes) return;
-      if (now() > deadline) fail("cloud_grow_unavailable", "My Cloud could not make room for this move in time.", details);
     }
   }
 
@@ -518,7 +460,7 @@ export function createCloudMove({ localRequest, fetchImpl = fetch, tempRoot, ava
           : new CloudMoveError("network", `The copy could not reach ${there()}. Check your connection and try again.`);
   }
   function destinationOf(dest) {
-    if (!record(dest) || (dest.kind !== "cloud" && dest.kind !== "server") || typeof dest.grant !== "function" || (dest.origin !== null && typeof dest.origin !== "string")) {
+    if (!record(dest) || dest.kind !== "server" || typeof dest.grant !== "function" || (dest.origin !== null && typeof dest.origin !== "string")) {
       throw new Error("A copy needs a destination.");
     }
     return { id: typeof dest.id === "string" ? dest.id : null, name: typeof dest.name === "string" ? dest.name : "", origin: dest.origin, kind: dest.kind };
@@ -574,16 +516,12 @@ export function createCloudMove({ localRequest, fetchImpl = fetch, tempRoot, ava
       if (local.bytes > CLOUD_MOVE_MAX_BYTES) fail("too_large", "This workspace is larger than a copy can carry.");
       // The destination checks again, exactly (its own backup included),
       // before the upload starts. A stored part of an earlier upload is freed
-      // first. A Cloud plan whose disk grows is measured at its largest disk.
-      let disk = null;
-      if (dest.kind === "cloud" && typeof dest.disk === "function") { try { disk = dest.disk(); } catch { /* today's free space only */ } }
-      const fit = moveFit({ localBytes: local.bytes, freeBytes: cloud.freeBytes, uploadReceived: cloud.uploadReceived, volumeBytes: cloud.volumeBytes, disk });
+      // first.
+      const fit = moveFit({ localBytes: local.bytes, freeBytes: cloud.freeBytes, uploadReceived: cloud.uploadReceived, volumeBytes: cloud.volumeBytes });
       if (fit.fit === "never") {
         const details = { ...fit }; delete details.fit;
         fail("cloud_full", `${There()} does not have enough free space for this copy.`, details);
       }
-      // Only a plan's disk (the Cloud's) can fit by growing.
-      if (fit.fit === "grow" && typeof dest.grow === "function") await makeRoom(dest, session, fit, signal);
       const archived = await archive(local, signal);
       await upload(session, archived, signal);
       publish({ phase: "checking", action: "move" });

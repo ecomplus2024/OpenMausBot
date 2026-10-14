@@ -60,9 +60,9 @@ export type SetupConnectedApps =
    * one brought in from a package or a backup). Only the person can change
    * either: the switch is owner-only, never a proposal. */
   | { state: "off"; noTools: boolean }
-  /** No connection service here: a server that was never given a key, the
-   * desktop app's own service not answering, or the one a Cloud plan includes. */
-  | { state: "not-configured"; host: "server" | "desktop" | "cloud" }
+  /** No connection service here: a server that was never given a key, or the
+   * desktop app's own service not answering. */
+  | { state: "not-configured"; host: "server" | "desktop" }
   /** This bot's model cannot use connected apps at all. */
   | { state: "unsupported" };
 
@@ -75,7 +75,7 @@ export function connectedAppsForSetup(input: {
   configured: boolean;
   enabled: boolean;
   grants: Record<string, unknown> | undefined;
-  host: "server" | "desktop" | "cloud";
+  host: "server" | "desktop";
 }): SetupConnectedApps {
   const noTools = input.grants !== undefined && Object.keys(input.grants).length === 0;
   if (input.mounted && !noTools) return { state: "available" };
@@ -98,7 +98,6 @@ function connectedAppsClause(apps: SetupConnectedApps): string {
         ? ` You have no connected-app tools, ${NO_APP} ask the user to open your settings → Access → Connected apps, turn it on, connect the app with Connect an app…, and give you its tools.`
         : ` Connected apps are switched off for you, ${NO_APP} ask the user to turn on Connected apps in your settings under Access, then tell you to go on; you can start the connection after that.`;
     case "not-configured":
-      if (apps.host === "cloud") return ` Connected apps come with their MausBot Cloud plan but are not answering right now, ${NO_APP} say so in one sentence and suggest trying again in a few minutes.`;
       if (apps.host === "desktop") return ` Connected apps are not answering right now, ${NO_APP} say so in one sentence: restarting OpenMausBot usually brings them back, or they can add their own ${KEY_PLACE}.`;
       return ` Connected apps are not set up here, ${NO_APP} say so in one sentence: they are set up by adding a ${KEY_PLACE}.`;
     case "unsupported":

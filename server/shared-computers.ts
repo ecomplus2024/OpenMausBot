@@ -120,7 +120,7 @@ export class SharedComputers {
     return [...this.computers.values()].filter(entry => entry.owner.person === principal && this.online(entry)).map(entry => entry.registration);
   }
   /** What one person has lent, online or not: the documented status a
-   * reader (the Cloud UI, the next step's placement) uses to tell "your Mac
+   * reader (the app UI, the next step's placement) uses to tell "your Mac
    * is lent and awake" from "lent but asleep" and "not lent". No secret, no
    * session. Resets when this server restarts; a lending desktop registers
    * again within seconds of being online. */

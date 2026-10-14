@@ -19,12 +19,10 @@ const mainSource = readFileSync(new URL("./main.mjs", import.meta.url), "utf8").
 // main's dialog replaced by `ctx.answer` ("allow", "deny" or null for no dialog).
 function harness(envState) {
   const mainContents = { getURL: () => "" };
-  const ctx = { state: envState, main: mainContents, answer: null, asked: [], cloud: null, restoring: null };
+  const ctx = { state: envState, main: mainContents, answer: null, asked: [] };
   const handlers = appPermissionHandlers({
     rendererOrigin: () => LOCAL,
     mainContents: () => ctx.main,
-    cloudHomeOrigin: () => ctx.cloud,
-    cloudHomeRestoring: () => ctx.restoring,
     activeRemoteOrigin: () => environments.activeEnvironment(ctx.state)?.origin ?? null,
     activeRemoteMicrophone: () => environments.activeEnvironment(ctx.state)?.microphone === true,
     askRemoteMicrophone: (origin) => {
@@ -120,30 +118,13 @@ test("a switch while the dialog is open refuses the waiting request", async () =
   assert.equal(await h.request(`${VPS}/`), false);
 });
 
-test("the Cloud opened as the active server waits for its sign-in to restore instead of asking (the review's repro)", async () => {
-  const CLOUD = "https://omb-u-0123456789ab.fly.dev";
-  const cloudActive = () => environments.withActive(environments.withEnvironment(state, { origin: CLOUD, name: "My Cloud" }, () => "cloud"), "cloud");
-  const restoreTo = (h, origin) => { h.ctx.restoring = Promise.resolve().then(() => { h.ctx.cloud = origin; h.ctx.restoring = null; }); };
-  for (const answer of ["allow", "deny"]) {
-    const h = harness(cloudActive());
-    h.ctx.answer = answer;
-    restoreTo(h, CLOUD);
-    assert.equal(await h.request(`${CLOUD}/chat`), true, `${answer}: granted once restored`);
-    assert.deepEqual(h.ctx.asked, [], `${answer}: no dialog for the person's own Cloud`);
-    assert.equal(environments.activeEnvironment(h.ctx.state).microphone, undefined, "nothing remembered on the record");
-  }
-  // The sign-in did not come back: it is just a saved server now, so asked.
-  const h = harness(cloudActive());
-  h.ctx.answer = "allow";
-  restoreTo(h, null);
-  assert.equal(await h.request(`${CLOUD}/chat`), true, "allowed by the person after the restore failed");
-  assert.deepEqual(h.ctx.asked, [CLOUD]);
-  // Another saved server asking during the restore: waits, then asked as before.
-  const v = harness(viewing("vps"));
-  v.ctx.answer = "deny";
-  restoreTo(v, "https://omb-u-0123456789ab.fly.dev");
-  assert.equal(await v.request(`${VPS}/chat`), false);
-  assert.deepEqual(v.ctx.asked, [VPS]);
+test("a saved server is asked by its name, whoever it belongs to", async () => {
+  // A saved server is not necessarily the person's own, so the microphone is
+  // always the person's answer, never assumed from the address.
+  const h = harness(viewing("vps"));
+  h.ctx.answer = "deny";
+  assert.equal(await h.request(`${VPS}/chat`), false);
+  assert.deepEqual(h.ctx.asked, [VPS], "asked for the exact active origin");
 });
 
 test("the answer is saved with the server and survives a restart, only as true", () => {

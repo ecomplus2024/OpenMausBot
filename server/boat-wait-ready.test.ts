@@ -33,7 +33,6 @@ describe("waiting for a cloud computer", () => {
     });
     await new Promise<void>((resolve) => api.listen(0, "127.0.0.1", resolve));
     vi.stubEnv("OMB_BOX_API", `http://127.0.0.1:${(api.address() as { port: number }).port}/api/box/v1`);
-    vi.stubEnv("OMB_CLOUD_BOAT_TOKEN", undefined);
     vi.resetModules();
     boat = await import("./boat.ts");
   });

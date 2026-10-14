@@ -3,9 +3,9 @@
 // still starting (not that someone else has it), a later call works, and the
 // computer is created once. A start that stalls ends at the start budget with
 // one "didn't start" row instead of "still starting" until the watchdog.
-// The real server, the fake Claude CLI and a stub of the Admin's Boat relay,
-// with the call wait and the start budget shortened; disposable home, no
-// network.
+// The real server, the fake Claude CLI and a stub of boat.dev for the
+// person's own key, with the call wait and the start budget shortened;
+// disposable home, no network.
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server, type ServerResponse } from "node:http";
@@ -19,7 +19,7 @@ import { freePortBlock } from "./testing/ports.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const FAKE_CLAUDE = join(ROOT, "server/testing/fake-claude-cli.ts");
-const INCLUDED = `box_omb_${randomUUID()}`;
+const OWN_KEY = `box_own_${randomUUID()}`;
 const FRAME = Buffer.from("/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==", "base64");
 /** One computer call waits this long on a start; the whole start, this long. */
 const CALL_WAIT_MS = 1_500;
@@ -33,10 +33,10 @@ describe("a slow cloud computer start", () => {
   let base = "";
   let child: ChildProcess | null = null;
   let output = "";
-  let relay: Server;
+  let boatApi: Server;
   const rows: Array<{ id: string; name?: string; state: string }> = [];
   const requests: string[] = [];
-  /** The relay keeps a new computer "provisioning" while this is set, and
+  /** The stub keeps a new computer "provisioning" while this is set, and
    * never answers a desktop link request while `desktop` is set. */
   const hold = { provisioning: false, desktop: false };
   const held: ServerResponse[] = [];
@@ -89,8 +89,8 @@ describe("a slow cloud computer start", () => {
   };
 
   beforeAll(async () => {
-    relay = createServer((req, res) => {
-      const url = new URL(req.url ?? "/", "http://relay.test");
+    boatApi = createServer((req, res) => {
+      const url = new URL(req.url ?? "/", "http://boat.test");
       let raw = "";
       req.on("data", chunk => { raw += chunk; });
       req.on("end", () => {
@@ -98,9 +98,9 @@ describe("a slow cloud computer start", () => {
           res.writeHead(status, { "content-type": "application/json" });
           res.end(JSON.stringify(payload));
         };
-        const path = url.pathname.replace(/^\/relay\/api\/box\/v1/, "");
+        const path = url.pathname.replace(/^\/api\/box\/v1/, "");
         requests.push(`${req.method} ${path}`);
-        if (req.headers.authorization !== `Bearer ${INCLUDED}`) return send(401, { ok: false, code: "unauthorized" });
+        if (req.headers.authorization !== `Bearer ${OWN_KEY}`) return send(401, { ok: false, code: "unauthorized" });
         if (path === "/boxes" && req.method === "GET") return send(200, { ok: true, boxes: rows, pageInfo: { nextCursor: null } });
         if (path === "/boxes" && req.method === "POST") {
           const row = { id: `bx_${"23456789abcdefgh"[rows.length]}3456789`, state: "provisioning" };
@@ -120,7 +120,7 @@ describe("a slow cloud computer start", () => {
           return send(200, { ok: true, box: seen });
         }
         if (verb === "desktop" && req.method === "POST") {
-          // Accepted, never answered: a relay that stalls.
+          // Accepted, never answered: a provider that stalls.
           if (hold.desktop) return void held.push(res);
           return send(200, { desktopUrl: `https://desktop.invalid/${row.id}` });
         }
@@ -132,8 +132,8 @@ describe("a slow cloud computer start", () => {
         send(404, { ok: false, code: "not_found" });
       });
     });
-    await new Promise<void>(resolve => relay.listen(0, "127.0.0.1", resolve));
-    const relayBase = `http://127.0.0.1:${(relay.address() as { port: number }).port}`;
+    await new Promise<void>(resolve => boatApi.listen(0, "127.0.0.1", resolve));
+    const boatBase = `http://127.0.0.1:${(boatApi.address() as { port: number }).port}`;
 
     home = mkdtempSync(join(tmpdir(), "omb-cloud-slow-"));
     const data = join(home, "data");
@@ -154,9 +154,8 @@ describe("a slow cloud computer start", () => {
         PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: data, TEMP: home, TMP: home, TMPDIR: home,
         OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
-        OMB_BOX_API: `${relayBase}/own-key-must-not-be-used`,
-        OMB_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`,
-        OMB_CLOUD_BOAT_TOKEN: INCLUDED,
+        OMB_BOX_API: `${boatBase}/api/box/v1`,
+        BOX_TOKEN: OWN_KEY,
         OMB_COMPUTER_CALL_WAIT_MS: String(CALL_WAIT_MS),
         OMB_CLOUD_COMPUTER_START_BUDGET_MS: String(START_BUDGET_MS),
       },
@@ -173,7 +172,7 @@ describe("a slow cloud computer start", () => {
   afterAll(async () => {
     if (child) await waitForExit(child, { signal: "SIGTERM" });
     for (const res of held) res.destroy();
-    if (relay) await new Promise<void>(resolve => { relay.closeAllConnections(); relay.close(() => resolve()); });
+    if (boatApi) await new Promise<void>(resolve => { boatApi.closeAllConnections(); boatApi.close(() => resolve()); });
     if (home) await removeTempDir(home);
   });
 

@@ -575,8 +575,7 @@ it("continues one recipient thread for every follow-up from the same conversatio
   expect((await leadTasks()).find((task: any) => task.threadId === f.lead.activeTaskId)).not.toHaveProperty("closedBy");
 }, { FAKE_CLAUDE_VERSION: "2.1.270" }), 90_000);
 
-// The same server code runs a VPS (`openmausbot serve`), the desktop app and
-// a Cloud home (server/cloud-personal.e2e.test.ts covers that one).
+// The same server code runs a VPS (`openmausbot serve`) and the desktop app.
 it.each<[string, NodeJS.ProcessEnv]>([
   ["a headless server", {}],
   ["the desktop app", { OMB_TEST_DESKTOP_OWNER_TOKEN: randomBytes(32).toString("base64url") }],

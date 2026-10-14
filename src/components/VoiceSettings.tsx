@@ -87,9 +87,6 @@ export function VoiceSettings({
       : t("voice.hostGeneric");
   const systemVoicesAvailable = capabilities.host.platform === "darwin";
   const hostConfigured = Boolean(tts?.configured);
-  // Cloud Pro's voice: it works with no saved key, and a key pasted here
-  // replaces it.
-  const included = Boolean(tts?.included);
   const configured = usesLocalSystem || hostConfigured;
 
   useEffect(() => {
@@ -300,7 +297,7 @@ export function VoiceSettings({
         <div className="mb-1.5 flex items-center gap-2 text-[13px] text-ink-secondary">
           <span className={cn("size-1.5 rounded-full", configured ? "bg-success" : "bg-raised-hover")} />
           <span>{t("voice.providerKey", { provider: cloudProvider.name })}</span>
-          {configured && <span className="text-[11px] text-success">{included ? t("keys.includedWithCloudPro") : t("keys.connected")}</span>}
+          {configured && <span className="text-[11px] text-success">{t("keys.connected")}</span>}
         </div>
         <div className="flex gap-2">
           <input
@@ -308,7 +305,7 @@ export function VoiceSettings({
             value={key}
             onChange={(e) => setKeyDraft({ provider: cloudProvider.id, value: e.target.value })}
             onKeyDown={(e) => e.key === "Enter" && key.trim() && void saveKey()}
-            placeholder={configured && !included ? t("voice.keyPlaceholderReplace") : cloudProvider.placeholder}
+            placeholder={configured ? t("voice.keyPlaceholderReplace") : cloudProvider.placeholder}
             aria-label={t("voice.providerKey", { provider: cloudProvider.name })}
             autoComplete="off"
             className="w-full rounded-lg border border-hairline/40 bg-inset px-3 py-2 text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none"

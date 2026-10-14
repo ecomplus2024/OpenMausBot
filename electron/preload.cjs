@@ -29,11 +29,8 @@ ipcRenderer.on("chat:open", (_event, link) => {
 });
 
 // Main can finish loading the document before React subscribes. Retain only
-// the fixed actions (Organisation, the openmausbot://cloud link, plain
-// Settings → OpenMausBot Cloud from the lending menu-bar item, and the Add a
-// Cloud dialog from the server menu, plain or reached through Show me how),
-// never a destination supplied by a renderer.
-const FIXED_SETTINGS_ACTIONS = new Set(["organization", "cloud", "cloud-settings", "cloud-add", "cloud-add-howto"]);
+// the fixed actions (Organisation), never a destination supplied by a renderer.
+const FIXED_SETTINGS_ACTIONS = new Set(["organization"]);
 let pendingSettingsAction = null;
 const appSettingsListeners = new Set();
 ipcRenderer.on("app:open-settings", (_event, section) => {
@@ -53,20 +50,10 @@ const isLocalPage = !localOrigin || location.origin === localOrigin;
 // cloudMove: main answers a remote page about that page's own server only,
 // while it is this window's active server (Copy this computer here's card and
 // its Settings → Backups); its Copy opens this computer's Settings on that
-// server's copy, except on the person's own verified Cloud. cloudLending and
-// cloudPlan: only that verified Cloud (its setup checklist, its plan line).
+// server's copy.
 /** A saved server's id, forwarded only from this computer's own page. */
 const savedServer = id => isLocalPage && typeof id === "string" && /^[\w-]{1,64}$/.test(id) ? [id] : [];
-const REMOTE_SAFE = new Set(["platform", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "cloudMove", "cloudLending", "cloudPlan"]);
-// updater: this app's updates, so the person sees "Restart to update" on My
-// Cloud too; a remote page restarts only on a click. Main says, once as the
-// page loads, whether it answers this page: pages built before it answered My
-// Cloud read the bridge alone as "You're up to date", so no other server's
-// page gets it. Main always answers, false on any doubt.
-function updaterOffered() {
-  try { return ipcRenderer.sendSync("update:offered") === true; } catch { return false; }
-}
-const remoteKeys = isLocalPage ? REMOTE_SAFE : new Set([...REMOTE_SAFE, ...(updaterOffered() ? ["updater"] : [])]);
+const REMOTE_SAFE = new Set(["platform", "getCapabilities", "onCapabilitiesChanged", "applySkin", "setUnreadCount", "permStatus", "workspaces", "cloudMove"]);
 
 // Sandboxed preload cannot import TS or sibling modules. Keep this list in
 // parity with shared/workspace-backup-client.ts (covered by the preload test).
@@ -345,40 +332,11 @@ const bridge = {
       return () => ipcRenderer.removeListener("workspaces:open-settings", handler);
     },
   },
-  cloudAccount: process.argv.includes("--omb-company-desktop=1") ? {
-    state: () => ipcRenderer.invoke("cloud-account:state"),
-    begin: () => ipcRenderer.invoke("cloud-account:begin"),
-    signInAgain: () => ipcRenderer.invoke("cloud-account:signInAgain"),
-    reopen: () => ipcRenderer.invoke("cloud-account:reopen"),
-    cancel: () => ipcRenderer.invoke("cloud-account:cancel"),
-    refresh: () => ipcRenderer.invoke("cloud-account:refresh"),
-    signOut: () => ipcRenderer.invoke("cloud-account:signOut"),
-    openDashboard: () => ipcRenderer.invoke("cloud-account:openDashboard"),
-    // What this person may buy now; no arguments.
-    offer: () => ipcRenderer.invoke("cloud-account:offer"),
-    // A checkout for one of the offer's plans, opened by main in the browser; main checks both.
-    checkout: (plan, source) => ipcRenderer.invoke("cloud-account:checkout", String(plan), String(source)),
-    connectHome: () => ipcRenderer.invoke("cloud-account:connectHome"),
-    connectHomeForPhone: () => ipcRenderer.invoke("cloud-account:connectHomeForPhone"),
-    onState: cb => {
-      const handler = (_event, state) => cb(state);
-      ipcRenderer.on("cloud-account:state-changed", handler);
-      return () => ipcRenderer.removeListener("cloud-account:state-changed", handler);
-    },
-    // "Let my Cloud use this Mac": main decides the Cloud; no argument names it.
-    lending: {
-      state: () => ipcRenderer.invoke("lending:state"),
-      chooseFolder: () => ipcRenderer.invoke("lending:folder"),
-      save: input => ipcRenderer.invoke("lending:save", input),
-      stop: () => ipcRenderer.invoke("lending:stop"),
-    },
-  } : undefined,
   /** Copy this computer here: this computer's workspace to a server the
-   * person added (their Cloud included). Only this computer's own page names
-   * where (a saved server's id, or "cloud"); a server's page names nothing,
-   * main answers it about itself, and its Copy (only from the person's own
-   * click) opens this computer's Settings on that copy, or, on the verified
-   * Cloud, starts it. */
+   * person added. Only this computer's own page names where (a saved server's
+   * id); a server's page names nothing, main answers it about itself, and its
+   * Copy (only from the person's own click) opens this computer's Settings on
+   * that copy. */
   cloudMove: process.argv.includes("--omb-company-desktop=1") ? {
     state: id => ipcRenderer.invoke("cloud-move:state", ...savedServer(id)),
     start: id => isLocalPage ? ipcRenderer.invoke("cloud-move:start", ...savedServer(id))
@@ -391,25 +349,6 @@ const bridge = {
       ipcRenderer.on("cloud-move:state-changed", handler);
       return () => ipcRenderer.removeListener("cloud-move:state-changed", handler);
     },
-  } : undefined,
-  /** The Cloud's setup checklist: "Let your Cloud use this Mac" opens the
-   * lending switch in this app's own Settings → OMB Cloud. No arguments; it
-   * shows the switch and changes nothing. */
-  cloudLending: process.argv.includes("--omb-company-desktop=1") ? {
-    open: () => ipcRenderer.invoke("cloud-lending:open"),
-  } : undefined,
-  /** The plan, read only, in Settings on the person's own Cloud: its name and
-   * whether it is active, Manage (the Plan page in the browser) and
-   * back to this computer. No arguments; a remote page acts only on a click.
-   * Also the free trial's popup, on this computer's page and the Cloud's:
-   * noticeSeen says the notice due now was shown (main knows which). */
-  cloudPlan: process.argv.includes("--omb-company-desktop=1") ? {
-    state: () => ipcRenderer.invoke("cloud-plan:state"),
-    manage: () => isLocalPage || navigator.userActivation?.isActive === true
-      ? ipcRenderer.invoke("cloud-plan:manage") : Promise.reject(new Error("Choose Manage to open your Plan page.")),
-    useThisComputer: () => isLocalPage || navigator.userActivation?.isActive === true
-      ? ipcRenderer.invoke("cloud-plan:local") : Promise.reject(new Error("Choose Use this computer to switch.")),
-    noticeSeen: () => ipcRenderer.invoke("cloud-plan:notice-seen"),
   } : undefined,
   organization: process.argv.includes("--omb-company-desktop=1") ? {
     settingsOpened: () => ipcRenderer.invoke("organization:settings-opened"),
@@ -452,5 +391,5 @@ const bridge = {
 
 contextBridge.exposeInMainWorld(
   "ogb",
-  isLocalPage ? bridge : Object.fromEntries(Object.entries(bridge).filter(([key]) => remoteKeys.has(key))),
+  isLocalPage ? bridge : Object.fromEntries(Object.entries(bridge).filter(([key]) => REMOTE_SAFE.has(key))),
 );

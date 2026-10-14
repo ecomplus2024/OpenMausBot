@@ -40,7 +40,7 @@ it("resumes an upload by its SHA-256, accepts a repeated part without writing it
   const file = randomBytes(3000), declared = { sha256: sha(file), bytes: file.length };
   expect(beginUpload(dataDir, declared)).toMatchObject({ received: 0 });
   expect(await writeUploadPart(dataDir, declared.sha256, 0, 1000, body(file.subarray(0, 600), file.subarray(600, 1000)))).toBe(1000);
-  // A retry of a part the Cloud already stored (its answer was lost) is a no-op.
+  // A retry of a part the server already stored (its answer was lost) is a no-op.
   expect(await writeUploadPart(dataDir, declared.sha256, 0, 1000, body(file.subarray(0, 1000)))).toBe(1000);
   await expect(writeUploadPart(dataDir, declared.sha256, 2000, 1000, body(file.subarray(2000)))).rejects.toMatchObject({ status: 409, received: 1000 });
   // The same file again continues; nothing already received is lost.
@@ -209,7 +209,7 @@ async function routes(options: { sharedWorkspace?: boolean; restored?: { id?: st
   return { call, owner: owner.token, phone: phone.token, restarts };
 }
 
-it("refuses a move that does not fit the Cloud's volume, counting a backup of what it replaces", async () => {
+it("refuses a move that does not fit the server's disk, counting a backup of what it replaces", async () => {
   writeFileSync(join(dataDir, "bots.json"), JSON.stringify([{ id: "a" }, { id: "b" }]));
   mkdirSync(join(dataDir, "attachments"));
   writeFileSync(join(dataDir, "attachments", "big.bin"), Buffer.alloc(1_000_000));
@@ -251,7 +251,7 @@ it("a workspace shared with other people never receives one, and says why", asyn
 });
 
 it("a server is shared only when someone besides its owner can sign in: the owner's own email alone is not", () => {
-  const lists = (admins: string[], members: string[] = []) => ({ hosted: false, cloudHome: false, signIn: { admins, members } });
+  const lists = (admins: string[], members: string[] = []) => ({ hosted: false, signIn: { admins, members } });
   // `openmausbot access add me@example.test`: the owner signs in from a browser.
   expect(workspaceShared(lists(["me@example.test"]))).toBe(false);
   expect(workspaceShared(lists([]))).toBe(false);
@@ -260,9 +260,8 @@ it("a server is shared only when someone besides its owner can sign in: the owne
   expect(workspaceShared(lists(["me@example.test", "cto@example.test"]))).toBe(true);
   expect(workspaceShared(lists(["@example.test"]))).toBe(true);
   expect(workspaceShared(lists([], ["@example.test"]))).toBe(true);
-  // A hosted organisation workspace always is; a Cloud home's sign-in is its owner's account.
+  // A hosted organisation workspace always is.
   expect(workspaceShared({ ...lists([]), hosted: true })).toBe(true);
-  expect(workspaceShared({ ...lists(["me@example.test"], ["colleague@example.test"]), cloudHome: true })).toBe(false);
 });
 
 it("says which version and which machine it is, so the app refuses an older server or this computer's own before exporting", async () => {
@@ -311,7 +310,7 @@ it("refuses a session without admin scope even if a gate in front let it through
   expect(await answer(owner, "GET", "/api/cloud-move")).toBe(200);
 });
 
-it("swapping back waits out a moment of activity, then keeps what the Cloud has now as the next previous Cloud, commits and restarts", async () => {
+it("swapping back waits out a moment of activity, then keeps what the server has now as the next previous workspace, commits and restarts", async () => {
   writeFileSync(join(dataDir, "bots.json"), JSON.stringify([{ id: "one" }, { id: "two" }]));
   const before = randomUUID();
   await prepareNextPreviousCloud(dataDir, before, backup(dataDir));
@@ -327,7 +326,7 @@ it("swapping back waits out a moment of activity, then keeps what the Cloud has 
   expect(refusals).toBe(-1);
   await expect.poll(() => cloud.restarts.length).toBe(1);
   const pending = JSON.parse(readFileSync(join(dataDir, ".backups", "pending-restore.json"), "utf8")).id;
-  // The swap: what the Cloud had becomes the previous Cloud once startup installs the restore.
+  // The swap: what the server had becomes the previous workspace once startup installs the restore.
   const next = JSON.parse(readFileSync(join(dataDir, ".backups", "cloud-previous.next", "previous.json"), "utf8"));
   expect(next).toMatchObject({ forRestore: pending, contents: { bots: 3 } });
 }, 60_000);
@@ -350,7 +349,7 @@ async function uploadAndPreview(cloud: Awaited<ReturnType<typeof routes>>, file:
 }
 const stagedJobs = () => readdirSync(join(dataDir, ".backups")).filter((name) => /^[0-9a-f-]{36}$/.test(name));
 
-it("a restore the Cloud cannot start leaves nothing staged behind, and a new upload drops an earlier preview", async () => {
+it("a restore the server cannot start leaves nothing staged behind, and a new upload drops an earlier preview", async () => {
   const file = await desktopArchive();
   // The Cloud's bots never stop working: every attempt at the gate is refused.
   const cloud = await routes({ exclusive: async () => { throw Object.assign(new Error("Wait for bot turns to finish."), { status: 409 }); } });
@@ -376,7 +375,7 @@ it("a stopped move's staged files are dropped, even when its preview finishes af
   expect((await cloud.call("POST", "/api/cloud-move/discard", cloud.owner, {})).status).toBe(200);
   expect(stagedJobs()).toEqual([]);
   expect((await cloud.call("POST", "/api/cloud-move/restore", cloud.owner, { id })).status).toBe(404);
-  // Stopped while the Cloud is still checking the upload.
+  // Stopped while the server is still checking the upload.
   const digest = sha(file);
   await cloud.call("POST", "/api/cloud-move/upload", cloud.owner, { sha256: digest, bytes: file.length });
   await cloud.call("PUT", `/api/cloud-move/upload/${digest}?offset=0`, cloud.owner, undefined, file);
@@ -422,7 +421,7 @@ it("reports what backups hold on the volume", async () => {
   expect(status.heldBytes).toBeGreaterThanOrEqual(status.previous.bytes);
 }, 60_000);
 
-it("tells the app how many routines are on here (they arrive paused) and how large the Cloud's volume is", async () => {
+it("tells the app how many routines are on here (they arrive paused) and how large the server's disk is", async () => {
   writeFileSync(join(dataDir, "routines.json"), JSON.stringify({ version: 1, routines: [{ id: "a", enabled: true }, { id: "b", enabled: false }, { id: "c" }], runs: [] }));
   const cloud = await routes({ volumeBytes: () => 20 * 1024 ** 3 });
   expect((await cloud.call("GET", "/api/cloud-move/estimate", cloud.owner)).body).toMatchObject({ routines: 2 });

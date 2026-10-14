@@ -83,7 +83,7 @@ const MACHINE_CODE = /^[a-z][a-z0-9_]*$/;
 /** What a failed HTTP response says, for the person: a JSON error envelope's
  *  own message ("Your team has used all available credits…") instead of the
  *  envelope, or the raw body when it carries none. The envelope's machine
- *  code follows the message, after the cut, because trial-credit.ts reads it. */
+ *  code follows the message, after the cut. */
 function httpErrorDetail(body: string, limit = 500): string {
   let json: CompletionJson | undefined;
   try { json = object(JSON.parse(body)); } catch { json = undefined; }
@@ -623,9 +623,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
     if (sessionGrants.size > MAX_DELIVERED_THREADS) sessionGrants.delete(sessionGrants.keys().next().value!);
     const approval = createChatToolApproval({
       signal: abort.signal,
-      // A guest's turn neither uses the owner's grants nor keeps one: its
-      // cards offer allow once only (index.ts request.opened).
-      granted: turn.guestConfined ? undefined : granted,
+      granted,
       open: (ask) => emit({
         ...base(turn.threadId, turnId), type: "request.opened", requestType: "permission",
         requestId: ask.id, tool: ask.tool, summary: ask.summary, allowSession: ask.grant !== undefined,
@@ -982,9 +980,8 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
         // No shell and no file tool on the host at all: only MCP tools, each
         // call a card in Ask unless "Always allow this session" covers it,
         // and the harness's own agents tools none, as on Claude and Codex
-        // (the Boat's `exec` runs on the Boat). A guest's turn is as confined
-        // as it gets.
-        guestTurns: "confined" },
+        // (the Boat's `exec` runs on the Boat).
+        },
       sendTurn,
       interruptTurn: async (threadId, turnId) => {
         const turn = active.get(threadId);

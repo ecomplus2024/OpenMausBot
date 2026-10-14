@@ -55,8 +55,7 @@ export class ThreadStarters {
   }
 
   /** Name `to` for every thread whose person `move` accepts: a one-time
-   * migration (server/cloud-owner.ts), not an ordinary record. The threads
-   * that changed. */
+   * migration, not an ordinary record. The threads that changed. */
   reassign(move: (person: string) => boolean, to: string): string[] {
     if (!KEY.test(to)) return [];
     const moved: string[] = [];

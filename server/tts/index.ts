@@ -1,5 +1,4 @@
 import type { AppConfig } from "../config.ts";
-import { voiceCredential } from "../included-services.ts";
 import * as chatterbox from "./chatterbox.ts";
 import * as elevenlabs from "./elevenlabs.ts";
 import * as grok from "./grok.ts";
@@ -25,9 +24,12 @@ export class NoVoiceConfigured extends Error {
   }
 }
 
-/** The ElevenLabs credential in use: the person's own key, else the one
- * included with Cloud Pro. Settings' own-key flows read cfg.tts.key instead. */
-const elevenLabs = (cfg: AppConfig) => voiceCredential(cfg.tts?.key);
+/** The ElevenLabs credential in use: the person's own key. Settings'
+ * own-key flows read cfg.tts.key instead. */
+const elevenLabs = (cfg: AppConfig) => {
+  const key = cfg.tts?.key?.trim();
+  return key ? { token: key, api: elevenlabs.elevenLabsProviderApi() } : null;
+};
 
 export function voiceProvider(cfg: AppConfig): VoiceProvider {
   const provider = cfg.tts?.provider;
@@ -73,11 +75,9 @@ export function voiceReady(cfg: AppConfig, voiceId?: string): boolean {
 /** What the settings panel needs. Never includes the key — same write-only
  * rule as every other credential. baseUrl and model are Chatterbox
  * settings, not credentials, so they come back in full; `fishModel` is the
- * Fish Audio speech model, resolved to its default when unset. `included`
- * says the voice is Cloud Pro's, not a saved key. */
+ * Fish Audio speech model, resolved to its default when unset. */
 export function describeVoice(cfg: AppConfig) {
   const provider = voiceProvider(cfg);
-  const included = provider === "elevenlabs" && elevenLabs(cfg)?.included === true;
   return {
     configured: providerConfigured(cfg),
     ready: voiceConfigured(cfg),
@@ -86,7 +86,6 @@ export function describeVoice(cfg: AppConfig) {
     baseUrl: provider === "chatterbox" ? (cfg.tts?.baseUrl ?? "") : "",
     model: provider === "chatterbox" ? (cfg.tts?.model ?? "") : "",
     ...(provider === "fish" ? { fishModel: cfg.tts?.fishModel ?? fish.DEFAULT_FISH_MODEL } : {}),
-    ...(included ? { included: true as const } : {}),
   };
 }
 

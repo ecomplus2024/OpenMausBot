@@ -24,7 +24,6 @@ import {
   setOpenCodeProviderKeyPolicy,
 } from "./opencode-go.ts";
 import { ATTACHMENTS_DIR } from "../../attachments.ts";
-import { cloudHomeConfigured } from "../../cloud-home.ts";
 import { OPENCODE_PROVIDER_ENV } from "../../config.ts";
 import { hostedWorkspaceConfigured } from "../../enterprise.ts";
 import { TASK_WORKSPACES_DIR, workspaceDir } from "../../workspace.ts";
@@ -354,16 +353,11 @@ describe("OpenCode catalog", () => {
     expect(describeOpenCodeAccountError("inactive_subscription", "opencode-go/minimax-m3")).toContain("OpenCode Go subscription");
   });
 
-  // On a Cloud the owner has no terminal: a key for any other provider is
-  // saved in Settings, under Keys for other OpenCode providers.
-  it("on a Cloud, sends another provider's refused key to Settings, not a terminal", () => {
+  it("sends another provider's refused key to the CLI's own sign-in", () => {
     for (const model of ["openrouter/openai/gpt-4o-mini", "venice/llama-3.3-70b", `${"very-long-provider-name".repeat(4)}/model`]) {
-      const cloud = describeOpenCodeAccountError("invalid_credentials", model, { cloudHome: true });
-      expect(cloud).not.toContain("opencode auth login");
-      expect(cloud).toContain("Save it under Keys for other OpenCode providers in Settings → API keys.");
-      expect(cloud.length, model).toBeLessThanOrEqual(160);
-      // on the person's own computer the CLI's sign-in still fixes it
-      expect(describeOpenCodeAccountError("invalid_credentials", model, { cloudHome: false })).toContain("opencode auth login");
+      const text = describeOpenCodeAccountError("invalid_credentials", model);
+      expect(text).toContain("opencode auth login");
+      expect(text.length, model).toBeLessThanOrEqual(160);
     }
   });
 
@@ -407,7 +401,7 @@ describe("OpenCode catalog", () => {
   });
 
   it("allows provider keys only where the server's environment is one person's own", () => {
-    const own = { cloudHome: false, hostedWorkspace: false, organisationManaged: false, sharedSignIn: false };
+    const own = { hostedWorkspace: false, organisationManaged: false, sharedSignIn: false };
     expect(openCodeProviderKeysAllowed(own)).toBe(true);
     for (const key of Object.keys(own) as Array<keyof typeof own>) {
       expect(openCodeProviderKeysAllowed({ ...own, [key]: true }), key).toBe(false);
@@ -427,7 +421,6 @@ describe("OpenCode catalog", () => {
     expect(source.match(/setOpenCodeProviderKeyPolicy\(/g)).toHaveLength(1);
     const policy = source.slice(source.indexOf("const openCodeKeysAllowed = "), wired);
     expect(policy).toContain("sharedSignIn: sharedSignIn(signInAllowList())");
-    expect(policy).toContain("cloudHome: Boolean(CLOUD_HOME)");
     expect(policy).toContain("hostedWorkspace: HOSTED_WORKSPACE");
     expect(policy).toContain("organisationManaged: openCodeOrganisationManaged()");
     expect(source).toContain("openCodeOrganisationManaged = () => managedPolicy.current() !== null || managedDesktop.enrolled();");
@@ -437,7 +430,7 @@ describe("OpenCode catalog", () => {
   // server's own environment (the operator's) stays out; one in OpenCode's
   // instance environment was put there on purpose (config.ts
   // injectedEnvironment), as claude.ts treats the workspace Anthropic key.
-  it("keeps the server's own provider keys out on a Cloud home or a managed desktop", async () => {
+  it("keeps the server's own provider keys out on a hosted workspace or a managed desktop", async () => {
     const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-managed-"));
     setOpenCodeProviderKeyPolicy(() => false);
     for (const key of OPENCODE_PROVIDER_ENV) vi.stubEnv(key, `operator-${key}`);
@@ -458,16 +451,17 @@ describe("OpenCode catalog", () => {
       await instance.dispose();
     } finally {
       vi.unstubAllEnvs();
-      setOpenCodeProviderKeyPolicy(() => !cloudHomeConfigured() && !hostedWorkspaceConfigured());
+      setOpenCodeProviderKeyPolicy(() => !hostedWorkspaceConfigured());
       await removeTempDir(scratch);
     }
   });
 
-  // On a Cloud the owner has no shell to export a key in: Settings saves it
-  // for OpenCode (config.ts openCodeProviderKeys), and the server hands it
-  // over in the instance environment. Those names go through; every other
-  // provider key the server's own environment holds still does not.
-  it("lets the owner's saved provider keys through on a Cloud home, and only those", async () => {
+  // Where the server's own environment is not the person's shell, Settings
+  // saves provider keys for OpenCode (config.ts openCodeProviderKeys), and
+  // the server hands them over in the instance environment. Those names go
+  // through; every other provider key the server's own environment holds
+  // still does not.
+  it("lets the owner's saved provider keys through where the server's own are refused, and only those", async () => {
     const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-own-keys-"));
     setOpenCodeProviderKeyPolicy(() => false);
     for (const key of OPENCODE_PROVIDER_ENV) vi.stubEnv(key, `operator-${key}`);
@@ -498,7 +492,7 @@ describe("OpenCode catalog", () => {
       await instance.dispose();
     } finally {
       vi.unstubAllEnvs();
-      setOpenCodeProviderKeyPolicy(() => !cloudHomeConfigured() && !hostedWorkspaceConfigured());
+      setOpenCodeProviderKeyPolicy(() => !hostedWorkspaceConfigured());
       await removeTempDir(scratch);
     }
   });

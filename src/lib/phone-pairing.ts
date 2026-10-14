@@ -1,24 +1,15 @@
 // "Connect your phone": one entry in the account menu that opens the phone
-// pairing this window can actually do. A Cloud customer once found only this
-// computer's pairing and could not see how to reach their Cloud from the
-// phone, so the entry names where the phone will connect.
+// pairing this window can actually do.
 //
 // - this computer (the desktop app on its own computer): the phone flow in
 //   Settings → Remote access, which pairs with this computer's companion;
-// - the person's own OMB Cloud (open in this window, or a browser): that
-//   Cloud's own Remote access pairing code;
 // - any other server: its pairing code, only for a session that may make one.
-//
-// On this computer, someone with a paid Cloud that is Ready is offered both:
-// their Cloud first (always on), then this computer.
-import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import type { LocaleKey } from "@/locales";
-import { cloudPlanView } from "./cloud-plan";
 import type { Action } from "@/state/store";
 import { readMembership } from "./membership";
 import { isOwnerOrAdmin, readSessionState, type SessionState } from "./session";
 
-export type PhonePairingTarget = "computer" | "cloud" | "server";
+export type PhonePairingTarget = "computer" | "server";
 
 /** Settings → Remote access, on the phone pairing this window can do (this
  * computer's phone flow, or the server's pairing code), with focus on the
@@ -33,18 +24,17 @@ export const phonePairingSettingsAction = (): Extract<Action, { type: "toggleApp
 /** This window's target, from the bridges it has and the server it shows.
  * The desktop's phone bridge is only on the local app's own page, never a
  * remote server's (the preload withholds it there). */
-export function currentPhonePairingTarget(cloudHome: boolean): PhonePairingTarget {
+export function currentPhonePairingTarget(): PhonePairingTarget {
   // SAFETY: the preload's narrow bridge; `companion` is read for presence only.
   const ogb = typeof window === "undefined" ? undefined : (window.ogb as { companion?: unknown; remoteClient?: { active?: boolean } } | undefined);
-  return phonePairingTarget({ companion: Boolean(ogb?.companion), remoteClient: ogb?.remoteClient?.active === true, cloudHome });
+  return phonePairingTarget({ companion: Boolean(ogb?.companion), remoteClient: ogb?.remoteClient?.active === true });
 }
 
 /** Where a phone pairs from this window. `companion`: this window has the
  * desktop's phone bridge (the local app, not a remote server's page);
  * `remoteClient`: this desktop is a client of another server, whose phones
- * pair there; `cloudHome`: the server is an OMB Cloud home. */
-export function phonePairingTarget(input: { companion: boolean; remoteClient: boolean; cloudHome: boolean }): PhonePairingTarget {
-  if (input.cloudHome) return "cloud";
+ * pair there. */
+export function phonePairingTarget(input: { companion: boolean; remoteClient: boolean }): PhonePairingTarget {
   return input.companion && !input.remoteClient ? "computer" : "server";
 }
 
@@ -63,7 +53,6 @@ export interface ConnectPhoneEntry {
 
 const SUBTITLE: Record<PhonePairingTarget, LocaleKey> = {
   computer: "sidebar.menu.connectPhone.computer",
-  cloud: "sidebar.menu.connectPhone.cloud",
   server: "sidebar.menu.connectPhone.server",
 };
 
@@ -75,38 +64,6 @@ const SUBTITLE: Record<PhonePairingTarget, LocaleKey> = {
 export function connectPhoneEntry(target: PhonePairingTarget, access: PhonePairingAccess | null): ConnectPhoneEntry | null {
   if (target !== "computer" && !(access && access.pairingCodes && isOwnerOrAdmin(access.session))) return null;
   return { target, subtitleKey: SUBTITLE[target] };
-}
-
-/** The person's own Cloud, as a second destination on this computer:
- * "ready" (a paid plan, any tier, and the Cloud Ready: offered first),
- * "not-ready" (paid, but the Cloud is setting up, stopped or unlisted: a
- * hint only), or null (no paid plan, signed out, or not known yet). Read
- * from the verified native snapshot only. */
-export type CloudPhoneDestination = "ready" | "not-ready" | null;
-
-export function cloudPhoneDestination(account: CloudAccountState | null | undefined): CloudPhoneDestination {
-  if (cloudPlanView(account).kind !== "paid") return null;
-  return account?.status === "connected" && account.machine?.status === "ready" ? "ready" : "not-ready";
-}
-
-/** One "Connect your phone" line. `id` "cloud": open the person's Cloud in
- * this window on its phone pairing (the Settings card's Use your Cloud on
- * your phone); "here": this window's own pairing. */
-export interface PhoneDestination extends ConnectPhoneEntry {
-  id: "cloud" | "here";
-  /** a quiet third line: why the Cloud is not offered yet */
-  noteKey?: LocaleKey;
-}
-
-/** The lines "Connect your phone" offers, in order. Only on this computer
- * does the person's Cloud join in, and first; on the Cloud itself, or any
- * other server, the window's own pairing is the only one. */
-export function phoneDestinations(entry: ConnectPhoneEntry | null, cloud: CloudPhoneDestination): PhoneDestination[] {
-  if (!entry) return [];
-  const here: PhoneDestination = { ...entry, id: "here" };
-  if (entry.target !== "computer" || !cloud) return [here];
-  if (cloud === "not-ready") return [{ ...here, noteKey: "sidebar.menu.connectPhone.cloudNotReady" }];
-  return [{ id: "cloud", target: "cloud", subtitleKey: "sidebar.menu.connectPhone.cloudAlwaysOn" }, here];
 }
 
 let pending: Promise<PhonePairingAccess> | null = null;
@@ -157,10 +114,9 @@ export function revealPhonePairing(
   return true;
 }
 
-/** `?desktop-settings=phone`: open Settings on the phone pairing. Main adds
- * it when "Use your Cloud on your phone" opens the Cloud in this window; it
- * asks only for a page to be shown and never makes a code by itself. Returns
- * the address without it, or null when it is not there. */
+/** `?desktop-settings=phone`: open Settings on the phone pairing. It asks
+ * only for a page to be shown and never makes a code by itself. Returns the
+ * address without it, or null when it is not there. */
 export function takePhonePairingRequest(href: string): string | null {
   const url = new URL(href);
   if (url.searchParams.get("desktop-settings") !== "phone") return null;
@@ -169,8 +125,7 @@ export function takePhonePairingRequest(href: string): string | null {
 }
 
 /** Where the pair page goes once this device is paired: home, carrying on
- * only that one request, so a first visit to the Cloud still ends on its
- * phone pairing. */
+ * only that one request, so a first visit still ends on its phone pairing. */
 export function pairedDestination(search: string): string {
   return new URLSearchParams(search).get("desktop-settings") === "phone" ? "/?desktop-settings=phone" : "/";
 }

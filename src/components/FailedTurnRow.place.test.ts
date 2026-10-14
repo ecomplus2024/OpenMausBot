@@ -34,12 +34,11 @@ vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => fixture.owne
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 
 const { FailedTurnRow } = await import("./ChatView");
-const { placeRowViewFor } = await import("@/lib/place-view");
 
 
 /** The row exactly as the server stores it. */
 const stored = (place: PlaceRow): NonNullable<Message["tool"]> => failedTurnTool(placeRowText(place), { place });
-const hours: PlaceRow = { state: "cc-no-hours", params: { bot: "Scout", plan: "Pro", hours: 50, month: "November" }, source: "works-on" };
+const needsKey: PlaceRow = { state: "cc-needs-key", params: { bot: "Scout" }, source: "works-on" };
 
 /** Render the row and read its buttons off the rendered tree. */
 function show(tool: NonNullable<Message["tool"]>, onRetry?: () => void) {
@@ -57,11 +56,11 @@ beforeEach(() => {
 });
 
 describe("J11: a failed place's row", () => {
-  it("says no hours are left in one line, with one button: See your plan", () => {
-    const { html, buttons } = show(stored(hours), vi.fn());
-    expect(html).toContain("This month&#x27;s 50 cloud computer hours are used up. They come back on 1 November.");
+  it("says a Boat key is needed in one line, with one button: Add Boat key", () => {
+    const { html, buttons } = show(stored(needsKey), vi.fn());
+    expect(html).toContain("A cloud computer here needs your own Boat key, a paid service.");
     expect(buttons).toHaveLength(1);
-    expect(buttons[0]).toContain("See your plan");
+    expect(buttons[0]).toContain("Add Boat key");
     // no Retry beside it, and no second copy of the words under Details
     expect(html).not.toContain("Retry");
     expect(html).not.toContain("<details");
@@ -83,20 +82,9 @@ describe("J11: a failed place's row", () => {
 
   it("gives a User no button that changes a setting, and says who can", () => {
     fixture.ownerOrAdmin = false;
-    const { html, buttons } = show(stored(hours), vi.fn());
-    expect(html).toContain("They come back on 1 November. Ask an Admin to change it.");
+    const { html, buttons } = show(stored(needsKey), vi.fn());
+    expect(html).toContain("a paid service. Ask an Admin to change it.");
     expect(buttons).toHaveLength(0);
-  });
-
-  it("reads Needs a Boat key as My Cloud's on a desktop with a paid plan", () => {
-    const needsKey: PlaceRow = { state: "cc-needs-key", params: { bot: "Scout" }, source: "works-on" };
-    expect(show(stored(needsKey)).html).toContain("A cloud computer here needs your own Boat key, a paid service.");
-    const seat = { server: "mac", plan: true, role: "admin", mode: "simple" } as const;
-    expect(placeRowViewFor(needsKey, seat)).toMatchObject({
-      state: "cc-on-my-cloud", line: "Cloud computers from your plan work for bots on My Cloud for now.", action: { id: "open-my-cloud" },
-    });
-    // My Cloud itself never reads it that way.
-    expect(placeRowViewFor(needsKey, { ...seat, server: "my-cloud" }).state).toBe("cc-needs-key");
   });
 });
 
@@ -108,13 +96,13 @@ describe("the phone row", () => {
 
   it("carries the line and its action in words, whole, for every source", () => {
     const rows: Array<[PlaceRow, string]> = [
-      [hours, "This month's 50 cloud computer hours are used up. They come back on 1 November. See your plan on the Plan page."],
+      [needsKey, "A cloud computer here needs your own Boat key, a paid service. Add a Boat key in Settings → API keys."],
       [{ state: "cc-unavailable", params: { bot: "Scout" }, source: "auto-pin" },
         "Cloud computers can't start right now. It isn't anything you did. This conversation is back on Auto. Send your message again."],
       [{ state: "cc-unavailable", params: { bot: "Scout" }, source: "routine" },
         "Cloud computers can't start right now. It isn't anything you did. Change where this routine runs."],
-      [{ state: "cc-at-once", params: { bot: "Bo", plan: "Personal", max: 1, holders: ["Ada"] }, source: "works-on" },
-        "Your Personal plan includes 1 cloud computer, and Ada has it. Manage your cloud computers in Settings → Local VM."],
+      [{ state: "cc-provider", params: { bot: "Bo", words: "Start the $20/month Boat plan." }, source: "works-on" },
+        "Your Boat account couldn't start Bo's cloud computer: Start the $20/month Boat plan. Try again."],
     ];
     for (const [place, words] of rows) {
       const tool = stored(place);

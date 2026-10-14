@@ -110,9 +110,10 @@ export interface Routine {
   /** Conversation that created this routine in chat. Calendar/import-created
    * routines intentionally have no source, and older files migrate in place. */
   sourceThreadId?: string;
-  /** The thread chosen in "Post results to", or a Cloud guest's own
-   * results thread; execution still gets a fresh task. Absent: every run
-   * reports into the bot's main thread as it is when the run is made. */
+  /** The thread chosen in "Post results to", or a member's own results
+   * thread on a shared server; execution still gets a fresh task. Absent:
+   * every run reports into the bot's main thread as it is when the run is
+   * made. */
   resultsThreadId?: string;
   /** Server-private: added from the organization's library. Never on the
    * wire (routineWithHealth drops it); packageStamps() reads it. */
@@ -303,7 +304,7 @@ export interface RoutineManagerOptions {
   isResultsThread?: (botId: string, threadId: string) => boolean;
   /** Reuse a chosen routine.resultsThreadId, else the bot's main thread
    * (`main`: never saved on the routine, since the next run asks again), else
-   * a Cloud guest's routine allocates its own. `forceNew` ignores the choice. */
+   * a member's routine on a shared server allocates its own. `forceNew` ignores the choice. */
   resolveResultsThread?: (routine: Routine, forceNew: boolean) => { threadId: string; main?: true } | undefined;
   /** Whether `threadId` can be the thread v0.1.98 to v0.1.107 saved on every
    * bot routine that had no destination of its own: its bot's oldest open
@@ -979,8 +980,8 @@ export class RoutineManager {
   /** Clear the destination v0.1.98 to v0.1.107 saved on routines as if a
    * person had chosen it (RoutineManagerOptions.frozenResultsThread), once:
    * a later pick of that same thread is a person's. Called once it is
-   * settled who opened which conversation (a Cloud home's earlier device
-   * keys), before any run or request can read a routine. */
+   * settled who opened which conversation, before any run or request can
+   * read a routine. */
   clearFrozenResultsThreads(): void {
     if (!this.frozenPending) return;
     for (const routine of this.routines) {

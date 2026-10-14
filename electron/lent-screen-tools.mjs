@@ -110,9 +110,9 @@ export function lentScreenArguments(name, input) {
   return { arguments: forwarded };
 }
 
-/** A driver tool as the Cloud sees it: only lent tools, and each schema cut
- * down to the arguments a lent screen accepts, so the model is never offered
- * one that would be refused. */
+/** A driver tool as a lending computer sees it: only lent tools, and each
+ * schema cut down to the arguments a lent screen accepts, so the model is
+ * never offered one that would be refused. */
 export function lentScreenToolListing(tools) {
   if (!Array.isArray(tools)) return [];
   return tools.filter(tool => typeof tool?.name === "string" && LENT_SCREEN_TOOLS.has(tool.name)).map(tool => {

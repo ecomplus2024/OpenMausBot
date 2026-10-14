@@ -128,7 +128,7 @@ describe("composeEnvelope: assignment with outside lineage", () => {
   it("names every outside source", () => {
     const wording: Record<string, string> = {
       chat: "a chat line nothing proves the user wrote", relay: "a relayed message", external_runtime: "an external runtime",
-      guest: "a Cloud guest", peer: "another bot", api: "the local API", routine: "a routine",
+      peer: "another bot", api: "the local API", routine: "a routine",
     };
     for (const [source, text] of Object.entries(wording)) {
       const sourced = assignment({ origin: { kind: "outside", source: source as Assignment["origin"]["source"] } });
@@ -144,7 +144,7 @@ describe("composeEnvelope: assignment with outside lineage", () => {
   });
 
   it("reports who the outside source names as the beneficiary, as its claim", () => {
-    const claimed = assignment({ origin: { kind: "outside", source: "guest", onBehalfOf: "Priya [guest]" } });
+    const claimed = assignment({ origin: { kind: "outside", source: "webhook", onBehalfOf: "Priya [guest]" } });
     expect(composeEnvelope(claimed, names)).toContain("It names Priya (guest) as who it is for.");
     expect(envelope).not.toContain("as who it is for");
   });

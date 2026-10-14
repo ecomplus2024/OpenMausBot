@@ -39,8 +39,7 @@ const EXCLUDED = new Set([
   // This machine's decision-model log (server/decider/log.ts): local
   // measurement of what the classifier picked, not workspace data.
   "decider-log",
-  // A Cloud home's record of who its owner was (server/cloud-owner.ts): this
-  // machine's own, kept in place by a restore, which settles what it brought.
+  // A retired owner's record, kept in place by a restore: this machine's own.
   "cloud-owner.json",
 ]);
 const EXCLUSION_NOTES = [

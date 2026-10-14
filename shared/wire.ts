@@ -406,9 +406,7 @@ export interface ResolvedSender {
  * owner on this machine, or a session-less local caller on a shared server
  * (`worker`: the Slack worker, or any other process on that machine). */
 export type CardAnswerer = (
-  /** `person`: the answering session's opaque person key, recorded on an OMB
-   * Cloud home only, where it decides whether an answer came from the owner
-   * (server/cloud-lending.ts). */
+  /** `person`: the answering session's opaque person key. */
   | { kind: "session"; name: string; person?: string }
   | { kind: "loopback" }
   | { kind: "worker" }
@@ -470,8 +468,7 @@ export interface WireMessage {
     fullResult?: boolean;
   };
   /** A bot line a "post" webhook wrote: whoever called the webhook chose
-   * its words. On a Cloud home a conversation holding one is someone else's
-   * for lending and memory (server/cloud-lending.ts reportsFromOthers). */
+   * its words. */
   webhookPost?: boolean;
   /** user messages sent INTO a running turn (capabilities.queueing). */
   steered?: boolean;

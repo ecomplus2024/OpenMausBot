@@ -2,7 +2,7 @@
 // The harness serves them at POST /api/internal/computer/mcp; the agent
 // process reaches that route through harness-mcp-proxy with a turn-scoped
 // capability, so the Boat credential never leaves this server. The same tools
-// and the same calls on a desktop, a headless server and an OMB Cloud.
+// and the same calls on a desktop and a headless server.
 import type { ValidateFunction } from "ajv";
 import { isolatedRemoteCommand, runCommand, screenshotBoat } from "./boat.ts";
 import type { AppConfig } from "./config.ts";

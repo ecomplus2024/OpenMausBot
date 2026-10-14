@@ -15,13 +15,12 @@ const mainSource = readFileSync(new URL("./main.mjs", import.meta.url), "utf8").
 // The real appPermissionHandlers (the ones main.mjs installs) fed by the real
 // environments authority: only Electron itself is faked. `ctx.state` is read
 // per request, exactly like main's `activeEnvironment(environmentsState)`.
-function harness(envState, { cloud = null } = {}) {
+function harness(envState) {
   const mainContents = { getURL: () => "" };
-  const ctx = { state: envState, main: mainContents, cloud };
+  const ctx = { state: envState, main: mainContents };
   const handlers = appPermissionHandlers({
     rendererOrigin: () => LOCAL,
     mainContents: () => ctx.main,
-    cloudHomeOrigin: () => ctx.cloud,
     activeRemoteOrigin: () => environments.activeEnvironment(ctx.state)?.origin ?? null,
   });
   const request = (permission, url, details = { isMainFrame: true }, contents = mainContents) => {
@@ -116,28 +115,19 @@ test("switching or forgetting the server withdraws the old origin at once", () =
   assert.equal(h.request("clipboard-sanitized-write", `${VPS}/`), false, "forgotten server");
 });
 
-test("the Cloud keeps its microphone and writes the clipboard by the same rule, and the server gets no microphone", () => {
-  const CLOUD = "https://omb-u-0123456789ab.fly.dev";
+test("a remote page writes the clipboard only while its server is the active one, and never hears the microphone unasked", () => {
   const audio = { isMainFrame: true, mediaTypes: ["audio"] };
-  // The Cloud is the page in the main window; no remote server is active.
-  const h = harness(viewing("local"), { cloud: CLOUD });
-  h.mainContents.getURL = () => `${CLOUD}/chat`;
-  assert.equal(h.request("media", `${CLOUD}/chat`, audio), true, "Cloud still hears the microphone");
-  assert.equal(h.request("media", `${CLOUD}/chat`, { isMainFrame: true, mediaTypes: ["audio", "video"] }), false, "never the camera");
-  assert.equal(h.request("media", `${CLOUD}/chat`, { isMainFrame: false, mediaTypes: ["audio"] }), false, "main frame only");
-  assert.equal(h.request("clipboard-sanitized-write", `${CLOUD}/chat`), true, "the Cloud writes the clipboard (its copy buttons)");
-  assert.equal(h.request("clipboard-sanitized-write", `${CLOUD}/chat`, { isMainFrame: false }), false, "main frame only");
-  assert.equal(h.request("clipboard-read", `${CLOUD}/chat`), false, "never reads it");
-  // The active remote server writes the clipboard but never hears the microphone.
-  const r = harness(viewing("vps"), { cloud: CLOUD });
-  assert.equal(r.request("clipboard-sanitized-write", `${VPS}/`), true);
-  assert.equal(r.request("media", `${VPS}/`, audio), false, "a paired server never hears the microphone");
-  assert.equal(r.check("media", VPS, audio), false);
-  // Both trusts together: the Cloud keeps its microphone and clipboard writes while a remote server is the active environment elsewhere.
-  r.mainContents.getURL = () => `${CLOUD}/chat`;
-  assert.equal(r.request("media", `${CLOUD}/chat`, audio), true);
-  assert.equal(r.request("clipboard-sanitized-write", `${CLOUD}/chat`), true);
-  assert.equal(r.request("clipboard-read", `${CLOUD}/chat`), false);
+  // VPS is the page in the main window; the other saved server gets nothing.
+  const h = harness(viewing("vps"));
+  h.mainContents.getURL = () => `${VPS}/chat`;
+  assert.equal(h.request("clipboard-sanitized-write", `${VPS}/chat`), true, "the active server writes the clipboard (its copy buttons)");
+  assert.equal(h.request("clipboard-sanitized-write", `${VPS}/chat`, { isMainFrame: false }), false, "main frame only");
+  assert.equal(h.request("clipboard-read", `${VPS}/chat`), false, "never reads it");
+  assert.equal(h.request("clipboard-sanitized-write", `${OTHER}/chat`), false, "a server that is not active writes nothing");
+  assert.equal(h.check("clipboard-sanitized-write", OTHER), false);
+  assert.equal(h.request("media", `${VPS}/chat`, audio), false, "microphone is asked, never assumed here");
+  assert.equal(h.request("media", `${OTHER}/chat`, audio), false);
+  assert.equal(h.check("media", VPS, audio), false);
 });
 
 test("main installs the active environment's origin into the shared handlers, with no second handler registration", () => {

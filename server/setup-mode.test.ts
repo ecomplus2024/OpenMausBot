@@ -20,7 +20,6 @@ const EVERY_STATE: Array<[string, SetupConnectedApps]> = [
   ["no tools", { state: "off", noTools: true }],
   ["server without a key", { state: "not-configured", host: "server" }],
   ["desktop service down", { state: "not-configured", host: "desktop" }],
-  ["Cloud service down", { state: "not-configured", host: "cloud" }],
   ["model cannot", { state: "unsupported" }],
 ];
 
@@ -142,7 +141,7 @@ describe("connectedAppsForSetup", () => {
   });
 
   it("is not configured when there is no connection service, saying where the bot runs", () => {
-    for (const host of ["server", "desktop", "cloud"] as const) {
+    for (const host of ["server", "desktop"] as const) {
       expect(connectedAppsForSetup({ ...facts, mounted: false, configured: false, enabled: false, host }))
         .toEqual({ state: "not-configured", host });
     }
@@ -183,10 +182,6 @@ describe("setupSystemPrompt connected apps", () => {
     expect(prompt({ state: "not-configured", host: "desktop" })).toContain(
       "restarting OpenMausBot usually brings them back, or they can add their own Composio project key in Settings → API keys, under Self-host connected apps.",
     );
-    // a Cloud's connected apps come with the plan: nothing for the person to set up
-    const cloud = prompt({ state: "not-configured", host: "cloud" });
-    expect(cloud).toContain("Connected apps come with their MausBot Cloud plan but are not answering right now");
-    expect(cloud).not.toContain("Composio");
     expect(prompt({ state: "unsupported" })).toContain("Your current model cannot use connected apps");
   });
 

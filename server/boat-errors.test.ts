@@ -36,17 +36,6 @@ describe("boatErrorMessage", () => {
     expect(msg).toMatch(/box_/);
   });
 
-  it("never asks for a token the person never pasted when Cloud Pro's included one is refused", () => {
-    for (const status of [401, 403]) {
-      const msg = boatErrorMessage(status, "boat create", { message: "This cloud computer key is not valid." }, true);
-      expect(msg).toBe("The cloud computers included with your Cloud plan aren't available right now. Try again later.");
-      expect(msg).not.toMatch(/box_|paste/);
-    }
-    // Cloud Pro's own refusals (its limits, its subscription) keep their words.
-    expect(boatErrorMessage(402, "boat create", { message: "Cloud computers are included with an active Cloud Pro subscription." }, true))
-      .toBe("Cloud computers are included with an active Cloud Pro subscription.");
-  });
-
   it("names the rate limit rather than a bare status", () => {
     expect(boatErrorMessage(429, "boat create", { message: "Too many boxes created today." })).toBe(
       "Too many boxes created today.",
@@ -60,10 +49,10 @@ describe("boatErrorMessage", () => {
 
 describe("boatRefusal", () => {
   it("keeps the provider's status and the Admin's own code for reading the failed place", () => {
-    const inactive = { ok: false, code: "subscription_inactive", message: "Cloud computers are included with an active Cloud subscription.",
-      error: { code: "subscription_inactive", message: "Cloud computers are included with an active Cloud subscription.", status: 402 } };
-    expect(boatRefusal(402, "boat create", inactive, true)).toMatchObject({
-      message: "Cloud computers are included with an active Cloud subscription.", boatStatus: 402, boatCode: "subscription_inactive",
+    const inactive = { ok: false, code: "subscription_inactive", message: "Cloud computers need an active subscription.",
+      error: { code: "subscription_inactive", message: "Cloud computers need an active subscription.", status: 402 } };
+    expect(boatRefusal(402, "boat create", inactive)).toMatchObject({
+      message: "Cloud computers need an active subscription.", boatStatus: 402, boatCode: "subscription_inactive",
     });
   });
 

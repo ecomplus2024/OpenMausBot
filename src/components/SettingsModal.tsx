@@ -22,15 +22,13 @@ import { ServerPairingCard } from "./ServerPairingCard";
 import { PeopleSection } from "./PeopleSection";
 import { ActivitySection } from "./ActivitySection";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
-import { currentPhonePairingTarget, phonePairingSettingsAction } from "@/lib/phone-pairing";
+import { currentPhonePairingTarget } from "@/lib/phone-pairing";
 import { CustomDomainSettings } from "./CustomDomainSettings";
 import { BrowserProfilesManager } from "./BrowserProfilesManager";
 import { LoginsSettings } from "./LoginsSettings";
 import { RemoteComputerSection } from "./RemoteComputerSection";
 import { ConnectedWorkspacesSettings } from "./ConnectedWorkspacesSettings";
 import { OrganizationSettings } from "./OrganizationSettings";
-import { CloudAccountSettings } from "./CloudAccountSettings";
-import { ProSettingsCard } from "./ProIntroduction";
 import { Card, SettingRow, Switch } from "./SettingsPrimitives";
 import { SkillReviewSettings } from "./SkillReviewSettings";
 import { effortLabel } from "./ModelPicker";
@@ -94,7 +92,6 @@ export const SECTIONS: Array<{
   { id: "desktopWorkspaces", group: "computers", labelKey: "settings.section.desktopWorkspaces", icon: Building2, keywords: ["workspace", "cloud", "hosted", "vps", "server", "servers", "connect", "pair", "switch", "local"] },
   { id: "computer", group: "computers", labelKey: "settings.section.computer", icon: Monitor, keywords: ["vm", "virtual", "desktop", "browser", "built-in browser", "profiles", "browser profiles"] },
   { id: "logins", group: "computers", labelKey: "settings.section.logins", icon: LockKeyhole, keywords: ["logins", "login", "passwords", "password", "sign in", "2fa", "one-time code", "totp", "fill_login", "1password", "vault"] },
-  { id: "cloudAccount", group: "account", labelKey: "settings.section.cloudAccount", icon: User, keywords: ["cloud", "account", "personal", "sign in", "pro", "subscription", "billing"] },
   { id: "organization", group: "account", labelKey: "settings.section.organization", icon: Building2, keywords: ["company", "organization", "organisation", "sign in", "enroll", "managed", "models", "disconnect"] },
   { id: "usage", group: "account", labelKey: "settings.section.usage", icon: Coins, keywords: ["tokens", "cost", "billing", "plan", "quota", "remaining", "weekly", "5-hour", "model", "used"] },
   { id: "backups", group: "account", labelKey: "settings.section.backups", icon: Archive, keywords: ["export", "import", "restore", "full backup", "password", "recovery"] },
@@ -119,7 +116,7 @@ export const SIMPLE_PAGES: SimpleSettingsPage[] = [
   { id: "appearance", labelKey: "settings.section.appearance", icon: Palette, sections: ["appearance"] },
   { id: "ai", labelKey: "settings.group.ai", icon: Sparkles, sections: ["engines", "connections", "decisionModel"] },
   { id: "computers", labelKey: "settings.group.computers", icon: Monitor, sections: ["companion", "desktopWorkspaces", "computer", "logins"] },
-  { id: "account", labelKey: "settings.group.account", icon: CircleUser, sections: ["cloudAccount", "organization", "people", "activity"] },
+  { id: "account", labelKey: "settings.group.account", icon: CircleUser, sections: ["organization", "people", "activity"] },
 ];
 
 /** Advanced-only pages. A deep link to one still opens it in Simple mode, as
@@ -214,7 +211,7 @@ function ProfileFields() {
 /** This app's updates, which download by themselves. Shown once the desktop
  * app answers: on this computer's page and the person's own Cloud page, never
  * on another server's, where its buttons would do nothing. "Ready" names the
- * app: on My Cloud's Settings it is this app that restarts, not the Cloud. */
+ * app: on a server's Settings it is this app that restarts, not the server. */
 export function UpdatesRow() {
   const s = useUpdaterState();
   const updater = window.ogb?.updater;
@@ -832,14 +829,10 @@ export function SettingsModal() {
   const baseSections = SECTIONS.filter((entry) => !remoteActive || entry.id === "companion" || entry.id === "appearance" || entry.id === "desktopWorkspaces")
     .filter((entry) => entry.id !== "desktopWorkspaces" || Boolean(window.ogb?.environments))
     .filter((entry) => entry.id !== "organization" || Boolean(window.ogb?.organization))
-    // On the person's own Cloud in this app's window, the plan shows read only (cloudPlan);
-    // never on any other server open here (a VPS, a hosted workspace, someone else's).
-    .filter((entry) => entry.id !== "cloudAccount" || Boolean(window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true)))
     // the operator's screen for other workspaces exists only where a fleet agent does
     .filter((entry) => entry.id !== "workspaces" || workspacesAvailable(state.config))
-    // sign-in by email is a hosted server's; the desktop app pairs devices under Remote access,
-    // and an OMB Cloud home is personal: nobody is invited to it
-    .filter((entry) => entry.id !== "people" || (!window.ogb && state.config?.cloudHome !== true))
+    // sign-in by email is a hosted server's; the desktop app pairs devices under Remote access
+    .filter((entry) => entry.id !== "people" || !window.ogb)
     // the activity log belongs to a workspace served to a browser, and to its admins
     .filter((entry) => entry.id !== "activity" || (!window.ogb && ownerOrAdmin === true));
   // the Skills surface browses the shared library, which exists only where
@@ -934,17 +927,11 @@ export function SettingsModal() {
         return <ConnectedWorkspacesSettings />;
       case "organization":
         return window.ogb?.organization && !remoteActive ? <OrganizationSettings /> : null;
-      case "cloudAccount":
-        return (window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true)) && !remoteActive
-          ? <CloudAccountSettings linkRequest={state.appSettingsCloudLink} cloudHome={state.config?.cloudHome === true}
-            onConnectPhone={() => dispatch(phonePairingSettingsAction())} onAddCloud={() => dispatch({ type: "openCloudAdd", source: "app_settings" })} />
-          : null;
       case "general":
         return (
           <>
             <AdvancedModeRow />
 
-            <ProSettingsCard />
             <Card title={t("settings.profile.title")} subtitle={t("settings.profile.sharedSubtitle")}>
               <ProfileFields />
             </Card>
@@ -1031,15 +1018,11 @@ export function SettingsModal() {
               <ApiKeyRow section="box" />
               <VpsConnection />
               <ApiKeyRow section="opencodeGo" />
-              {/* A Cloud owner has no terminal there: the keys for other
-                  providers, just below, are the way on. */}
-              {state.config?.cloudHome !== true && (
-                <p className="-mt-2 text-[11.5px] leading-relaxed text-ink-secondary">
-                  {/* {command} marks where the code chip goes, so a translator can move it */}
-                  {t("keys.opencode.providersHint").split("{command}").flatMap((part, index) =>
-                    index === 0 ? [part] : [<code key={index} className="font-mono">opencode auth login</code>, part])}
-                </p>
-              )}
+              <p className="-mt-2 text-[11.5px] leading-relaxed text-ink-secondary">
+                {/* {command} marks where the code chip goes, so a translator can move it */}
+                {t("keys.opencode.providersHint").split("{command}").flatMap((part, index) =>
+                  index === 0 ? [part] : [<code key={index} className="font-mono">opencode auth login</code>, part])}
+              </p>
               <OpenCodeProviderKeys />
               <details className="rounded-lg border border-hairline/40 bg-inset px-3 py-2">
                 <summary className="cursor-pointer text-[13px] text-ink-secondary">{t("settings.connections.selfHost")}</summary>
@@ -1058,9 +1041,9 @@ export function SettingsModal() {
         return <><WorkspaceBackupSettings /><CompanyBackupSettings /></>;
       case "companion": {
         // "Connect your phone" lands on the one pairing that fits this window:
-        // this computer's phone flow, or this server's (or Cloud's) pairing code.
+        // this computer's phone flow, or this server's pairing code.
         const phoneFocus = state.appSettingsPhonePairing;
-        const computerPairs = currentPhonePairingTarget(state.config?.cloudHome === true) === "computer";
+        const computerPairs = currentPhonePairingTarget() === "computer";
         return (
           <>
             <RemoteComputerSection />
@@ -1071,7 +1054,7 @@ export function SettingsModal() {
                 a remote client of a hosted workspace: its requests carry that server's session, and
                 Settings there is the only place that server's phones can be paired from (MOCA-84).
                 The server decides who may act — an owner or an admin session — not this gate. */}
-            <ServerPairingCard cloudHome={state.config?.cloudHome === true} focusRequest={computerPairs ? 0 : phoneFocus} />
+            <ServerPairingCard focusRequest={computerPairs ? 0 : phoneFocus} />
             {!remoteActive && <CompanionSection profileEmail={state.config?.profile?.email} focusRequest={computerPairs ? phoneFocus : 0} />}
           </>
         );

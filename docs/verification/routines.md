@@ -126,8 +126,7 @@ again, so the routine saves nothing and its results follow the person. A routine
 still pointing at an automatic "<name> · Results" thread from an older version
 moves to the main thread on its next run; that thread and its reports stay. The
 oldest thread that v0.1.98 to v0.1.107 saved on routines as if it were chosen is
-cleared once on upgrade, also when it was archived since. On a Cloud home, a routine written by someone other
-than the owner keeps its own results conversation, opened as theirs. Historical
+cleared once on upgrade, also when it was archived since. Historical
 runs keep the destination they started with. If that destination is deleted,
 their execution threads become visible so results and approvals remain
 reachable; future runs report into the main thread. No existing user

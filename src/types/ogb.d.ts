@@ -115,16 +115,10 @@ const __APP_VERSION__: string;
     ogb?: {
       platform: NodeJS.Platform;
       organization?: import("../../electron/managed-desktop.mjs").ManagedDesktopBridge;
-      cloudAccount?: import("../../electron/cloud-account.mjs").CloudAccountBridge;
-      /** Copy this computer here: this computer's page names a saved server (or
-       * "cloud"); a server's own page is answered about itself only, and its
-       * Copy opens this computer's Settings on that copy (the verified Cloud's starts it). */
+      /** Copy this computer here: this computer's page names a saved server;
+       * a server's own page is answered about itself only, and its
+       * Copy opens this computer's Settings on that copy. */
       cloudMove?: import("../../electron/cloud-move.mjs").CloudMoveBridge;
-      /** The Cloud's setup checklist: shows the lending switch in this app's
-       * own Settings → OMB Cloud (leaving the Cloud's page). */
-      cloudLending?: { open(): Promise<void> };
-      /** Settings on the person's own Cloud: the plan, read only. */
-      cloudPlan?: import("../../electron/cloud-account.mjs").CloudPlanBridge;
       companyBackups?: {
         state(): Promise<CompanyBackupState>;
         list(): Promise<{ backups: CompanyBackupEntry[]; usedBytes: number; limits: { ownerQuotaBytes: number; retainedSnapshots: number } }>;
@@ -245,7 +239,7 @@ const __APP_VERSION__: string;
        * status is deliberately absent — macOS 15+ caches it per-process,
        * so it lies for the whole session after a grant. `pageMic`: whether
        * this app lets the asking page use the microphone (this computer's
-       * page always; a server's page only on the person's own Cloud).
+       * page always; a server's page only once the person allowed it).
        * Absent in older builds of the shell. */
       permStatus(): Promise<{ mic: string; pageMic?: "allowed" | "refused" }>;
       /** Triggers the macOS microphone prompt; resolves true when granted. */
@@ -279,9 +273,8 @@ const __APP_VERSION__: string;
       onChatLink?(cb: (link: string) => void): () => void;
       /** The desktop shell's app-menu Preferences… item was activated; open
        * app Settings. Local-shell only: remote server pages never receive
-       * the channel, and the bridge is absent in the browser. "cloud" is the
-       * openmausbot://cloud link (Settings → OMB Cloud, opened by the link). */
-      onOpenAppSettings?(cb: (section?: "organization" | "cloud" | "cloud-settings" | "cloud-add" | "cloud-add-howto") => void): () => void;
+       * the channel, and the bridge is absent in the browser. */
+      onOpenAppSettings?(cb: (section?: "organization") => void): () => void;
       /** Updates the native Dock/taskbar unread indicator. */
       setUnreadCount?(count: number): void;
       /** Opens a live desktop as a sandboxed window owned by OpenMausBot. */
@@ -329,8 +322,8 @@ const __APP_VERSION__: string;
         value: string,
       ): Promise<ConfigStatus>;
       /** In-app auto-update (packaged app only; dormant in dev). Updates
-       * download by themselves. On this computer's page and the person's own
-       * Cloud page; any other server's page gets no state. onState fires
+       * download by themselves. On this computer's own page only; a server's
+       * page gets no state. onState fires
        * with the current state, then on transitions. */
       updater?: {
         check(): Promise<void>;

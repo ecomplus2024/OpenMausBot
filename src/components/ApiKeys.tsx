@@ -20,8 +20,6 @@ const SECTIONS: Record<
     body: (value: string, firstKey: boolean) => unknown;
     /** A key is saved. */
     flag: (config: ConfigStatus) => boolean;
-    /** Works with no saved key: Cloud Pro includes it. */
-    included?: (config: ConfigStatus) => boolean;
   }
 > = {
   composio: {
@@ -30,8 +28,7 @@ const SECTIONS: Record<
   },
   box: {
     body: (v) => ({ box: { token: v } }),
-    flag: (c) => c.box.configured && c.box.included !== true,
-    included: (c) => c.box.included === true,
+    flag: (c) => c.box.configured,
   },
   opencodeGo: { body: (v) => ({ opencodeGo: { apiKey: v } }), flag: (c) => c.opencodeGo?.configured ?? false },
   // A key first saved here runs only "Claude (API key)"; signed-in Claude
@@ -286,7 +283,6 @@ export function ApiKeyRow({
   const saveAfterPaste = useRef(false);
 
   const configured = state.config ? SECTIONS[section].flag(state.config) : false;
-  const included = state.config ? SECTIONS[section].included?.(state.config) === true : false;
   const clearing = !value.trim() && configured;
   const credential = credentialCopy(section);
 
@@ -354,7 +350,7 @@ export function ApiKeyRow({
   return (
     <div data-api-key-row={section}>
       <div className="mb-1.5 flex items-center gap-2 text-[13px] text-ink-secondary">
-        <span className={cn("size-1.5 rounded-full", configured || included ? "bg-success" : "bg-raised-hover")} />
+        <span className={cn("size-1.5 rounded-full", configured ? "bg-success" : "bg-raised-hover")} />
         <span>{credential.label}</span>
         {credential.optional && (
           <span className="rounded bg-control px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-secondary">
@@ -362,7 +358,6 @@ export function ApiKeyRow({
           </span>
         )}
         {configured && <span className="text-[11px] text-ink-secondary">{t("keys.configured")}</span>}
-        {included && <span className="text-[11px] text-ink-secondary">{t("keys.includedWithCloudPro")}</span>}
         <CredentialHelp section={section} />
       </div>
       <div className="flex gap-2">
@@ -422,7 +417,7 @@ export function ApiKeyRow({
 /** Keys for OpenCode's other providers (Venice, Groq, DeepSeek…), each under
  * the name OpenCode reads it from. Write-only like every key: the server sends
  * back names, never keys, and hands the keys to OpenCode alone. Saved in the
- * server's own config, on the desktop and on a Cloud alike. */
+ * server's own config. */
 export function OpenCodeProviderKeys() {
   const { state, dispatch } = useStore();
   const names = state.config?.opencodeGo?.providerKeys ?? [];

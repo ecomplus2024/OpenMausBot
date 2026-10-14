@@ -17,7 +17,7 @@ export const PHONE_APPS: ReadonlyArray<{ id: "ios" | "android"; nameKey: LocaleK
 /** One place a phone can connect from here, as the menu offers it. */
 export interface PhoneAppConnect {
   key: string;
-  /** where it connects: to your Cloud (always on), to this computer… */
+  /** where it connects: to a server (always on), to this computer… */
   subtitle: string;
   onSelect: () => void;
 }

@@ -1,7 +1,7 @@
 // "Works on: Cloud" (Hosted desktop) end to end, the incident of Oct 3: a
 // Claude bot set to the cloud computer had its turn handed to the Computer
-// engine, which posted the prompt to Boat's own runner; on an OMB Cloud that
-// runner has no AI sign-in, so every turn failed with a bare
+// engine, which posted the prompt to Boat's own runner; on a headless server
+// that runner has no AI sign-in, so every turn failed with a bare
 // provider_not_configured and the bot looked broken until it was recreated.
 // Now the bot keeps its own engine and model, and the cloud computer arrives
 // as one more stdio computer server the harness serves. Real server, fake

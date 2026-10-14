@@ -8931,7 +8931,7 @@ describe("harness HTTP API", () => {
     const fake = await startFakeHttpMcp({ acceptBearer: oauth.isValid, wwwAuthenticate: oauth.challenge });
     const opened = await api("POST", "/api/auth/pairing", { scopes: ["admin", "client"] });
     const token = (await api("POST", "/api/auth/pair", { code: opened.body.code })).body.token as string;
-    // What the edge proxy in front of My Cloud hands the server (node's
+    // What a reverse proxy in front of a hosted server hands it (node's
     // fetch drops a custom Host header, so this goes through http.request).
     const viaProxy = (method: string, path: string, headers: Record<string, string> = {}, body?: unknown) =>
       new Promise<{ status: number; text: string; headers: Record<string, unknown> }>((resolve, reject) => {
@@ -10861,7 +10861,7 @@ describe("harness HTTP API", () => {
           action: "create",
           routine: {
             name: "Cloud brief",
-            instructions: "Summarize today's priorities in the Cloud VM.",
+            instructions: "Summarize today's priorities on the VPS.",
             schedule: { type: "weekly", time: "09:00", weekdays: ["monday"] },
             runOn: "cloud",
           },
@@ -13301,8 +13301,6 @@ describe("bot memory API", () => {
       });
       expect(before.body.sections.map((s: { id: string }) => s.id)).not.toContain("soul");
       expect(before.body.sections.map((s: { id: string }) => s.id)).toContain("memory");
-      // Only an OMB Cloud home tells its bots they run in the cloud.
-      expect(before.body.sections.map((s: { id: string }) => s.id)).not.toContain("cloud-home");
       expect((await api("GET", "/api/config")).body).not.toHaveProperty("cloudHome");
       expect(before.body.totalBytes).toBe(
         before.body.sections.reduce((n: number, s: { bytes: number }) => n + s.bytes, 0),

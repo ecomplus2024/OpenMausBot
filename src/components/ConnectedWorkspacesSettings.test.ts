@@ -1,5 +1,5 @@
 // Settings → Servers: Copy this computer here on each server this app added
-// (docs/copy-workspace.md), opening the same copy panel as Settings → OMB Cloud.
+// (docs/copy-workspace.md), opening the same copy panel as Settings → Servers.
 import { Children, createElement, isValidElement, type EffectCallback, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

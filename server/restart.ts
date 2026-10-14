@@ -7,7 +7,6 @@
 //   - `openmausbot serve` (cli.ts serveUntilStopped), which systemd, launchd,
 //     fleet and a terminal all run;
 //   - the container image's launcher (server-launcher.ts);
-//   - the OMB Cloud home's launcher (cloud-home-start.ts);
 //   - the desktop app's supervisor, which starts its server again after any
 //     exit (electron/server-supervisor.mjs).
 //

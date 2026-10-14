@@ -11,8 +11,8 @@ same runtime as the other ACP engines.
    [OpenCode installation guide](https://opencode.ai/docs/).
 2. Connect the providers you want in the OpenCode app, run
    `opencode auth login`, or save the provider's key in OpenMausBot under
-   Settings → API keys → **Keys for other OpenCode providers**. On an OMB
-   Cloud, which has no terminal, save the key there.
+   Settings → API keys → **Keys for other OpenCode providers**. On a server
+   with no terminal, save the key there.
 3. Restart OpenMausBot. It reuses OpenCode's existing connections and model
    configuration automatically.
 
@@ -29,11 +29,11 @@ messages, or command arguments.
 Keys for OpenCode's other providers go under **Keys for other OpenCode
 providers** in the same place, each under the environment name OpenCode reads
 it from: `VENICE_API_KEY` for Venice, `GROQ_API_KEY` for Groq, and so on. This
-works on the desktop and on My Cloud, where there is no terminal to export
+works on the desktop and on a server, where there is no terminal to export
 them in. Each key is write-only (Settings shows its name, never the key), is
 kept in the server's own config, and is passed only to the OpenCode process;
 saving one reloads the engines, so OpenCode lists that provider's models
-straight away. On a Cloud, a hosted team or an organization's desktop,
+straight away. On a hosted team or an organization's desktop,
 OpenCode still never reads provider keys from the server's own environment;
 the keys saved here are the exception. Names OpenMausBot keeps for itself
 (`OPENCODE_*`, `OMB_*`, and the keys it saves for other engines, such as

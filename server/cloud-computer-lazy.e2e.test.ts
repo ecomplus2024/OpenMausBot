@@ -1,10 +1,9 @@
 // A bot set to work on its cloud computer starts that computer only when it
 // actually uses it. The real server, the fake Claude CLI and one stub that
-// plays the Admin's Boat relay (the included cloud computers of an
-// OpenMausBot Cloud plan). Every relay request is recorded, so each journey
-// can say exactly which calls a person's action cost: a chat that never
-// touches the screen costs none, and the first computer call creates the
-// computer once. Disposable home; no network.
+// plays boat.dev for the person's own key. Every provider request is
+// recorded, so each journey can say exactly which calls a person's action
+// cost: a chat that never touches the screen costs none, and the first
+// computer call creates the computer once. Disposable home; no network.
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server } from "node:http";
@@ -21,8 +20,8 @@ import { withoutTurnClock } from "./testing/turn-clock-text.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const FAKE_CLAUDE = join(ROOT, "server/testing/fake-claude-cli.ts");
-const INCLUDED = `box_omb_${randomUUID()}`;
-// A one-pixel JPEG: what the relay hands back as a screen frame.
+const OWN_KEY = `box_own_${randomUUID()}`;
+// A one-pixel JPEG: what the provider hands back as a screen frame.
 const FRAME = Buffer.from("/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==", "base64");
 
 type Row = { id: string; name?: string; state: string };
@@ -36,13 +35,13 @@ describe("a cloud computer starts only when the bot uses it", () => {
   let base = "";
   let child: ChildProcess | null = null;
   let output = "";
-  let relay: Server;
+  let boatApi: Server;
   let events: SseRecorder;
   const rows: Row[] = [];
   /** Looks a waking computer still answers "resuming" to. */
   const wakeLooks = { left: 0 };
-  /** The relay refuses every create the way the Admin does once a plan's
-   * hours are used up. */
+  /** The provider refuses every create the way boat.dev does once the
+   * plan's hours are used up. */
   const refuse = { creates: false };
   const requests: Request[] = [];
   /** Boat ids in Boat's own alphabet, one per computer created. */
@@ -134,8 +133,8 @@ describe("a cloud computer starts only when the bot uses it", () => {
   };
 
   beforeAll(async () => {
-    relay = createServer((req, res) => {
-      const url = new URL(req.url ?? "/", "http://relay.test");
+    boatApi = createServer((req, res) => {
+      const url = new URL(req.url ?? "/", "http://boat.test");
       let raw = "";
       req.on("data", chunk => { raw += chunk; });
       req.on("end", () => {
@@ -143,16 +142,16 @@ describe("a cloud computer starts only when the bot uses it", () => {
           res.writeHead(status, { "content-type": "application/json" });
           res.end(JSON.stringify(payload));
         };
-        // Every request is counted, a stray own-key one included.
-        const path = url.pathname.replace(/^\/relay\/api\/box\/v1/, "");
+        // Every request is counted.
+        const path = url.pathname.replace(/^\/api\/box\/v1/, "");
         requests.push({ method: req.method ?? "GET", path });
-        if (req.headers.authorization !== `Bearer ${INCLUDED}` || !url.pathname.startsWith("/relay/api/box/v1")) {
+        if (req.headers.authorization !== `Bearer ${OWN_KEY}` || !url.pathname.startsWith("/api/box/v1")) {
           return send(401, { ok: false, code: "unauthorized", message: "Unauthorized" });
         }
         const body = raw ? JSON.parse(raw) : {};
         if (path === "/boxes" && req.method === "GET") return send(200, { ok: true, boxes: rows, pageInfo: { nextCursor: null } });
         if (path === "/boxes" && req.method === "POST") {
-          if (refuse.creates) return send(402, { ok: false, code: "hours_used", message: "This month's 50 cloud computer hours are used up." });
+          if (refuse.creates) return send(402, { ok: false, code: "plan_limit", message: "Your Boat plan's sandbox hours are used up." });
           const row = { id: boxId(rows.length), state: "provisioning" };
           rows.push(row);
           return send(201, { ok: true, box: row });
@@ -187,8 +186,8 @@ describe("a cloud computer starts only when the bot uses it", () => {
         send(404, { ok: false, code: "not_found", message: "Not found" });
       });
     });
-    await new Promise<void>(resolve => relay.listen(0, "127.0.0.1", resolve));
-    const relayBase = `http://127.0.0.1:${(relay.address() as { port: number }).port}`;
+    await new Promise<void>(resolve => boatApi.listen(0, "127.0.0.1", resolve));
+    const boatBase = `http://127.0.0.1:${(boatApi.address() as { port: number }).port}`;
 
     home = mkdtempSync(join(tmpdir(), "omb-cloud-lazy-"));
     data = join(home, "data");
@@ -206,7 +205,7 @@ describe("a cloud computer starts only when the bot uses it", () => {
         driver: "claudeAgent", config: { cli: FAKE_CLAUDE },
         environment: { FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1" },
       },
-      // The same CLI, signed out: what a Cloud with no AI sign-in yet runs.
+      // The same CLI, signed out: what a cloud-computer bot with no AI sign-in yet runs.
       "claude-out": {
         driver: "claudeAgent", config: { cli: FAKE_CLAUDE },
         environment: { FAKE_CLAUDE_MODE: "not-logged-in", FAKE_CLAUDE_AUTH: "out" },
@@ -220,10 +219,9 @@ describe("a cloud computer starts only when the bot uses it", () => {
         PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: data, TEMP: home, TMP: home, TMPDIR: home,
         OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
-        // An own key would go here; nothing may use it.
-        OMB_BOX_API: `${relayBase}/own-key-must-not-be-used`,
-        OMB_CLOUD_BOAT_URL: `${relayBase}/relay/api/box/v1`,
-        OMB_CLOUD_BOAT_TOKEN: INCLUDED,
+        // The person's own Boat key, against the loopback stub.
+        OMB_BOX_API: `${boatBase}/api/box/v1`,
+        BOX_TOKEN: OWN_KEY,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -240,7 +238,7 @@ describe("a cloud computer starts only when the bot uses it", () => {
   afterAll(async () => {
     events?.close();
     if (child) await waitForExit(child, { signal: "SIGTERM" });
-    if (relay) await new Promise<void>(resolve => { relay.closeAllConnections(); relay.close(() => resolve()); });
+    if (boatApi) await new Promise<void>(resolve => { boatApi.closeAllConnections(); boatApi.close(() => resolve()); });
     if (home) await removeTempDir(home);
   });
 
@@ -256,7 +254,7 @@ describe("a cloud computer starts only when the bot uses it", () => {
     await apiOk("DELETE", `/api/bots/${bot.id}`);
   });
 
-  it("a plain chat on Cloud computer makes no relay call at all", async () => {
+  it("a plain chat on Cloud computer makes no provider call at all", async () => {
     const bot = await cloudBot("Chatter");
     const before = requests.length;
     const sent = await startTurn(bot.id, "hi");
@@ -273,7 +271,7 @@ describe("a cloud computer starts only when the bot uses it", () => {
     await apiOk("DELETE", `/api/bots/${bot.id}`);
   }, 30_000);
 
-  it("a room message to a member on Cloud computer makes no relay call either", async () => {
+  it("a room message to a member on Cloud computer makes no provider call either", async () => {
     const bot = await cloudBot("Room member");
     const { group } = await apiOk("POST", "/api/groups", { name: "Lazy room", memberIds: [bot.id] });
     await apiOk("PATCH", `/api/groups/${group.id}/setup`, { action: "skip" });
@@ -328,7 +326,7 @@ describe("a cloud computer starts only when the bot uses it", () => {
     await apiOk("DELETE", `/api/bots/${bot.id}`);
   }, 60_000);
 
-  it("a signed-out engine fails with the existing sign-in row and no relay call", async () => {
+  it("a signed-out engine fails with the existing sign-in row and no provider call", async () => {
     const bot = await cloudBot("Signed out", { modelSelection: { instanceId: "claude-out", model: "claude-sonnet-5" } });
     const before = requests.length;
     await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "hi" });
@@ -341,7 +339,7 @@ describe("a cloud computer starts only when the bot uses it", () => {
     await apiOk("DELETE", `/api/bots/${bot.id}`);
   }, 30_000);
 
-  it("a tool selection without the computer is refused before any relay call, and select_computer does not offer it", async () => {
+  it("a tool selection without the computer is refused before any provider call, and select_computer does not offer it", async () => {
     const bot = await cloudBot("Scribe", { toolScope: { deny: ["mcp:computer:*"] } });
     const before = requests.length;
     await apiOk("POST", `/api/bots/${bot.id}/messages`, { text: "hi" });
@@ -401,10 +399,10 @@ describe("a cloud computer starts only when the bot uses it", () => {
       const rows = await errorRows(group.threadId);
       expect(rows).toHaveLength(1);
       expect(rows[0].from).toMatchObject({ botId: bot.id, name: "Roomie" });
-      // Read as a room member's place (shared/place-view.ts): the Admin's
-      // code, with no retry of its own.
-      expect(rows[0].tool.name).toBe("error: This month's cloud computer hours are used up. See your plan on the Plan page.");
-      expect(rows[0].tool.place).toEqual({ state: "cc-no-hours", params: { bot: "Roomie" }, source: "room" });
+      // Read as a room member's place (shared/place-view.ts): the provider's
+      // own words, with no retry of its own.
+      expect(rows[0].tool.name).toBe("error: Your Boat account couldn't start Roomie's cloud computer: Your Boat plan's sandbox hours are used up.");
+      expect(rows[0].tool.place).toEqual({ state: "cc-provider", params: { bot: "Roomie", words: "Your Boat plan's sandbox hours are used up." }, source: "room" });
       await apiOk("DELETE", `/api/groups/${group.id}`);
       await apiOk("DELETE", `/api/bots/${bot.id}`);
     } finally {
@@ -433,8 +431,8 @@ describe("a cloud computer starts only when the bot uses it", () => {
       // error: the same words as the row, never "interrupted".
       expect(finished.status).toBe("failed");
       expect(`error: ${finished.error}`).toBe(rows[0].tool.name);
-      expect(finished.error).toBe("This month's cloud computer hours are used up. See your plan on the Plan page.");
-      expect(rows[0].tool.place).toEqual({ state: "cc-no-hours", params: { bot: "Runner" }, source: "routine" });
+      expect(finished.error).toBe("Your Boat account couldn't start Runner's cloud computer: Your Boat plan's sandbox hours are used up. Change where this routine runs.");
+      expect(rows[0].tool.place).toEqual({ state: "cc-provider", params: { bot: "Runner", words: "Your Boat plan's sandbox hours are used up." }, source: "routine" });
       // The run's thread settles once the interrupt that ended it lands.
       await until(() => task(bot.id), current => current?.busy === false && current.tasks.every((entry: any) => !entry.busy));
       await apiOk("DELETE", `/api/routines/${routine.id}`);

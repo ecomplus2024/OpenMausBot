@@ -90,7 +90,7 @@ function workspaceWindowTitle(state, companion) {
 }
 
 /** Renderer navigation stays in the selected workspace. Switching is a main
- * process action; a cloud page must not navigate itself onto the local bridge. */
+ * process action; a remote page must not navigate itself onto the local bridge. */
 function workspaceNavigationAllowed(url, state, localOrigin) {
   try {
     return new URL(url).origin === (activeEnvironment(state)?.origin ?? localOrigin);
@@ -110,12 +110,9 @@ function workspaceSenderAllowed(event, contents, state, localOrigin) {
   }
 }
 
-/** Native menu choices, never renderer-supplied destinations or callbacks. */
-/** The sidebar's server menu. `onAddCloud`: "Add a Cloud…" just under the
- * saved servers, only where main offers OpenMausBot Cloud (cloudOffersAllowed);
- * `sublabels`: a saved server's line under its name in place of its host (My
- * Cloud's "Always on"). */
-function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddCloud, sublabels = {} }) {
+/** The sidebar's server menu. `sublabels`: a saved server's line under its
+ * name in place of its host. */
+function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, sublabels = {} }) {
   const active = activeEnvironment(state);
   return [
     { id: "workspace-local", label: "This computer", type: "radio", checked: !active, click: () => onSwitch(LOCAL_ID) },
@@ -123,7 +120,6 @@ function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddClou
       id: `workspace-${entry.id}`, label: entry.name, sublabel: Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.kind === "local" ? entry.dataDir : new URL(entry.origin).host,
       type: "radio", checked: entry.id === state.activeId, click: () => onSwitch(entry.id),
     })),
-    ...(onAddCloud ? [{ id: "workspace-add-cloud", label: "Add a Cloud…", sublabel: "Keeps your bots running 24/7", click: onAddCloud }] : []),
     { type: "separator" },
     { id: "workspace-connect", label: "Connect to a server…", click: onConnect },
     ...(active ? [{ id: "workspace-forget", label: `Forget “${active.name}”…`, click: () => onForget(active.id) }] : []),

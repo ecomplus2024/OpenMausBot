@@ -14,7 +14,15 @@ import { createHash } from "node:crypto";
 
 import { DATA_DIR, type AppConfig } from "./config.ts";
 import { loadEnvironmentId } from "./environment.ts";
-import { boatCredential, boatProviderApi, type ServiceCredential } from "./included-services.ts";
+
+export const BOAT_API_DEFAULT = "https://ascii.dev/api/box/v1";
+const boatProviderApi = (env: NodeJS.ProcessEnv = process.env): string => env.OMB_BOX_API || BOAT_API_DEFAULT;
+
+export interface ServiceCredential {
+  token: string;
+  /** The only base URL this token is ever sent to. */
+  api: string;
+}
 import {
   adoptResolvedBoat,
   beginBoatCreate,
@@ -162,9 +170,8 @@ function snapshotBoatConfig(cfg: AppConfig): AppConfig {
   return { box: cfg.box ? { token: cfg.box.token } : undefined };
 }
 
-/** The base URL follows the credential in use (included-services.ts): an own
- * token goes to Boat (OMB_BOX_API points it at a stub in tests), Cloud Pro's
- * included token only to its relay. */
+/** The person's token goes to Boat (OMB_BOX_API points it at a stub in
+ * tests). */
 function boatFetch(cfg: AppConfig, path: string, opts: RequestInit = {}) {
   const account = boatAccount(cfg);
   return fetch(`${account?.api ?? boatProviderApi()}${path}`, {
@@ -390,7 +397,7 @@ async function requestRecordedBoatDeletion(
   }
   if (!removed.ok) {
     markBoatDeletionBlocked(identity.boxId);
-    throw Object.assign(new Error(boatErrorMessage(removed.status, "boat delete", removed.body, usesIncludedBoat(cfg))), { status: removed.status });
+    throw Object.assign(new Error(boatErrorMessage(removed.status, "boat delete", removed.body)), { status: removed.status });
   }
   const confirmation = await confirmAcceptedBoatDeletion(cfg, deletion, removed.body, pollDelaysMs);
   if (confirmation === "blocked") throw deletionBlockedError(identity.boxId);
@@ -481,7 +488,7 @@ async function waitReady(cfg: AppConfig, boxId: string, budgetMs = 90_000) {
         const resumed = await boatJson(cfg, `/boxes/${boxId}/resume`, { method: "POST", signal: untilDeadline() });
         if (resumed.ok) resumeFailure = null;
         else if (resumed.status !== 409) {
-          const refusal = boatRefusal(resumed.status, "waking the cloud computer", resumed.body, usesIncludedBoat(cfg));
+          const refusal = boatRefusal(resumed.status, "waking the cloud computer", resumed.body);
           if (resumed.status < 500) throw refusal;
           resumeFailure = refusal;
         }
@@ -502,9 +509,9 @@ async function waitReady(cfg: AppConfig, boxId: string, budgetMs = 90_000) {
 // the live state so callers can still see "archived".
 const boatIdCache = new Map<string, string>();
 
-function boatInventoryProblem(status: number, body: any, included = false): string {
+function boatInventoryProblem(status: number, body: any): string {
   if (status === 401 || status === 403) {
-    return included ? INCLUDED_BOAT_UNAVAILABLE : "boat.dev rejected the Boat API key — update it in Settings → API keys";
+    return "boat.dev rejected the Boat API key — update it in Settings → API keys";
   }
   if (status === 429) return "boat.dev is rate-limiting this account — wait a minute and refresh";
   const message = typeof body?.message === "string" ? body.message.trim() : "";
@@ -535,7 +542,7 @@ async function listBoatPages(
     if (!listed.ok || !Array.isArray(listed.body?.boxes)) {
       return {
         ok: false,
-        problem: boatInventoryProblem(listed.status, listed.body, usesIncludedBoat(cfg)),
+        problem: boatInventoryProblem(listed.status, listed.body),
         credentialRejected: listed.status === 401 || listed.status === 403,
       };
     }
@@ -812,7 +819,7 @@ export async function inspectBoatIdentity(cfg: AppConfig, boxId: string): Promis
     return { available: true, identity: null, problem: null };
   }
   if (!inspected.ok) {
-    return { available: false, identity: null, problem: boatInventoryProblem(inspected.status, inspected.body, usesIncludedBoat(cfg)) };
+    return { available: false, identity: null, problem: boatInventoryProblem(inspected.status, inspected.body) };
   }
   const candidate = inspected.body?.box;
   const returnedId = typeof candidate?.id === "string" ? candidate.id : "";
@@ -875,7 +882,7 @@ async function stopBoat(cfg: AppConfig, boxId: string): Promise<void> {
   await runCommand(cfg, boxId, QUIESCE_BROWSER, { timeoutMs: 5_000 }).catch(() => null);
   const stopped = await boatJson(cfg, `/boxes/${boxId}/stop`, { method: "POST" });
   if (!stopped.ok) {
-    throw Object.assign(new Error(boatErrorMessage(stopped.status, "boat sleep", stopped.body, usesIncludedBoat(cfg))), { status: stopped.status });
+    throw Object.assign(new Error(boatErrorMessage(stopped.status, "boat sleep", stopped.body)), { status: stopped.status });
   }
 }
 
@@ -1017,25 +1024,20 @@ export async function readyBoat(cfg: AppConfig, botId: string, budgetMs = 60_000
   return waitReady(cfg, boat.id, budgetMs);
 }
 
-/** The Boat credential a request uses: the person's own token, else Cloud
- * Pro's included one. Settings' own-key flows read cfg.box.token instead. */
+/** The Boat credential a request uses: the person's own token. Settings'
+ * own-key flows read cfg.box.token instead. */
 export function boatAccount(cfg: AppConfig): ServiceCredential | null {
-  return boatCredential(cfg.box?.token);
+  const token = cfg.box?.token;
+  return token ? { token, api: boatProviderApi() } : null;
 }
 
 export function boatConfigured(cfg: AppConfig) {
   return Boolean(boatAccount(cfg));
 }
 
-function usesIncludedBoat(cfg: AppConfig): boolean {
-  return boatAccount(cfg)?.included === true;
-}
-
-/** What Settings shows: configured-or-not, and whether that is Cloud Pro's
- * included account rather than a saved key. Never the token. */
-export function describeBoatAccount(cfg: AppConfig): { configured: boolean; included?: true } {
-  const account = boatAccount(cfg);
-  return { configured: Boolean(account), ...(account?.included ? { included: true as const } : {}) };
+/** What Settings shows: configured-or-not. Never the token. */
+export function describeBoatAccount(cfg: AppConfig): { configured: boolean } {
+  return { configured: Boolean(boatAccount(cfg)) };
 }
 
 /** Ask the provider whether a token is real, before we let someone save
@@ -1065,16 +1067,11 @@ export async function verifyToken(token: string): Promise<{ ok: true } | { ok: f
   }
 }
 
-/** A rejected Cloud relay token: nothing the person pasted, so nothing
- * for them to fix in Settings. Plan-neutral: every Cloud plan includes them. */
-const INCLUDED_BOAT_UNAVAILABLE = "The cloud computers included with your Cloud plan aren't available right now. Try again later.";
-
 /** Turn a provider refusal into something a person can act on. The
  * provider's own message is better than anything we can invent — it knows
  * the plan, the limit and the link — so prefer it and only fall back to
- * our own wording when it says nothing useful. `included`: the request used
- * Cloud Pro's included token, not the person's own. */
-export function boatErrorMessage(status: number, what: string, body?: any, included = false): string {
+ * our own wording when it says nothing useful. */
+export function boatErrorMessage(status: number, what: string, body?: any): string {
   const theirs = typeof body?.message === "string" ? body.message.trim() : "";
   const link = typeof body?.error?.details?.billingUrl === "string" ? body.error.details.billingUrl : "";
   if (status === 402) {
@@ -1082,7 +1079,6 @@ export function boatErrorMessage(status: number, what: string, body?: any, inclu
     return [theirs || "boat.dev needs a paid Boat plan before it will create a computer.", link].filter(Boolean).join(" ");
   }
   if (status === 401 || status === 403) {
-    if (included) return INCLUDED_BOAT_UNAVAILABLE;
     return "your box token was rejected by boat.dev — open App Settings and paste a current token (it starts with box_)";
   }
   if (status === 429) {
@@ -1096,9 +1092,9 @@ export function boatErrorMessage(status: number, what: string, body?: any, inclu
  * read from the code first and from the words only until every refusal
  * has one (shared/place-view.ts cloudRefusal). Named apart from `status`,
  * which a route would answer with. */
-export function boatRefusal(status: number, what: string, body?: any, included = false): Error & { boatStatus: number; boatCode?: string } {
+export function boatRefusal(status: number, what: string, body?: any): Error & { boatStatus: number; boatCode?: string } {
   const code = body?.error?.code ?? body?.code;
-  return Object.assign(new Error(boatErrorMessage(status, what, body, included)), {
+  return Object.assign(new Error(boatErrorMessage(status, what, body)), {
     boatStatus: status, ...(typeof code === "string" && /^[a-z0-9_]{1,64}$/.test(code) ? { boatCode: code } : {}),
   });
 }
@@ -1265,7 +1261,7 @@ export async function provisionBoat(cfg: AppConfig, botId: string, _botName: str
       // retry when boat.dev reports their shorter TTL ceiling.
       const createRes = await createBoat(cfg, botId);
       if (!createRes.ok || !createRes.body?.box?.id) {
-        throw boatRefusal(createRes.status, "boat create", createRes.body, usesIncludedBoat(cfg));
+        throw boatRefusal(createRes.status, "boat create", createRes.body);
       }
       boat = createRes.body.box;
       createRequest = createRes.request;
@@ -1274,7 +1270,7 @@ export async function provisionBoat(cfg: AppConfig, botId: string, _botName: str
         method: "PATCH",
         body: JSON.stringify({ name: vmName }),
       });
-      if (!rename.ok) throw new Error(boatErrorMessage(rename.status, "box naming", rename.body, usesIncludedBoat(cfg)));
+      if (!rename.ok) throw new Error(boatErrorMessage(rename.status, "box naming", rename.body));
       if (createRequest) createRequest = resolveBoatCreate(createRequest);
     }
     const ready = await waitReady(cfg, boat.id);

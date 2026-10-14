@@ -2,8 +2,7 @@
 // soon as a check finds one (macOS also stages the ZIP at once) and install
 // when the app quits, or at once on the person's "Restart to update". Nothing
 // restarts by itself in the middle of a call or a turn. One state object is
-// broadcast on every transition, to this computer's page and to the person's
-// own Cloud page.
+// broadcast on every transition to this computer's page.
 //
 // Only runs in the packaged, signed+notarized app (mac auto-update requires
 // signing). In dev it's a no-op so the browser/dev shell is unaffected.
@@ -79,15 +78,8 @@ function setState(patch) {
   }
 }
 
-/** Send the current state to the window's page again, if it may read it now:
- * a page main refused while the Cloud sign-in was being restored hears it
- * once the sign-in lets it (main.mjs, on every Cloud sign-in change). */
-export function sendUpdaterState() {
-  setState({});
-}
-
 /** The updater changes THIS app: `allowed(event)` says which page may read
- * and drive it (this computer's page, and the person's own Cloud page). */
+ * and drive it (this computer's own page only). */
 export function registerUpdaterIpc({ pageAllowed: allowed }) {
   pageAllowed = allowed;
   const guarded = (channel, handler) => (event) => {

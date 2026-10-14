@@ -14,7 +14,7 @@ export async function answerSignIn(ref: Pick<ComputerHelpRef, "botId" | "threadI
 }
 
 /** "This computer" is the person's own only in the desktop app that runs
- * the bots; a browser tab, a Cloud home or a desktop paired to another host
+ * the bots; a browser tab or a desktop paired to another host
  * shows a computer somewhere else. */
 export function signInHostIsHere(): boolean {
   return Boolean(window.ogb) && window.ogb?.remoteClient?.active !== true;

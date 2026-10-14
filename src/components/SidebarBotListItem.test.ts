@@ -111,9 +111,9 @@ describe("BotListItem", () => {
 
     it("previews a failed turn's row when the record follows it", () => {
       const markup = draw(bot({
-        messages: [spoken, { id: "e1", role: "bot", kind: "activity", at: at(1), tool: { name: "error: This computer isn't a place on your OMB Cloud: its bots run in the cloud.", ok: false } }, record] as Bot["messages"],
+        messages: [spoken, { id: "e1", role: "bot", kind: "activity", at: at(1), tool: { name: "error: This computer's bots run on a cloud computer.", ok: false } }, record] as Bot["messages"],
       }));
-      expect(markup).toContain("This computer isn&#x27;t a place on your OMB Cloud: its bots run in the cloud.");
+      expect(markup).toContain("This computer&#x27;s bots run on a cloud computer.");
       expect(markup).not.toContain("Call with Atlas");
     });
 
@@ -148,10 +148,10 @@ describe("BotListItem", () => {
     const markup = renderRow(bot({
       messages: [
         { id: "u1", role: "user", kind: "text", text: "check the site", at: 1 },
-        { id: "e1", role: "bot", kind: "activity", at: 2, tool: { name: "error: This computer isn't a place on your OMB Cloud: its bots run in the cloud.", ok: false } },
+        { id: "e1", role: "bot", kind: "activity", at: 2, tool: { name: "error: This computer's bots run on a cloud computer.", ok: false } },
       ] as Bot["messages"],
     }));
-    expect(markup).toContain("This computer isn&#x27;t a place on your OMB Cloud: its bots run in the cloud.");
+    expect(markup).toContain("This computer&#x27;s bots run on a cloud computer.");
     expect(markup).not.toContain("error:");
   });
 

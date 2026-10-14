@@ -42,10 +42,10 @@ async function run() {
   let win;
   try {
     await Promise.all(servers.map(server => new Promise(resolve => server.listen(0, "127.0.0.1", resolve))));
-    // `cloudOrigin` plays the person's verified Cloud; `foreignOrigin` any other server;
-    // `laterCloudOrigin` a Cloud page loaded before the saved sign-in has restored,
+    // `remoteOrigin` plays the active saved server; `foreignOrigin` any other server;
+    // `laterRemoteOrigin` a server page asking before the person answered,
     // `laterForeignOrigin` another server's page asking in that same window.
-    const [origin, foreignOrigin, cloudOrigin, laterCloudOrigin, laterForeignOrigin] = servers.map(server => `http://127.0.0.1:${server.address().port}`);
+    const [origin, foreignOrigin, remoteOrigin, laterRemoteOrigin, laterForeignOrigin] = servers.map(server => `http://127.0.0.1:${server.address().port}`);
     await app.whenReady();
     const guard = screenPreview.createDisplayMediaGuard();
     // perm:status's `pageMic`, asked over real IPC as the app's preload asks it:
@@ -55,13 +55,14 @@ async function run() {
     const pageMic = () => win.webContents.executeJavaScript("window.smoke.pageMic()", true);
     win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, preload } });
     // The app's own handlers (electron/main.mjs installs the same ones).
-    // `restoring`: while set, the saved sign-in is restoring; the request
-    // handler asking for it starts the restore's end, so a request that never
+    // `asking`: while set, the person has not answered the server's microphone
+    // question yet; the request handler waits on it, so a request that never
     // reaches it never gets the microphone.
-    let home = cloudOrigin, restoring = null;
+    let remote = remoteOrigin, microphone = true, asking = null;
     const waited = [];
     const permissions = appPermissionHandlers({ rendererOrigin: () => origin, mainContents: () => win?.webContents ?? null,
-      cloudHomeOrigin: () => home, cloudHomeRestoring: () => restoring?.() ?? null });
+      activeRemoteOrigin: () => remote, activeRemoteMicrophone: () => microphone,
+      askRemoteMicrophone: () => asking?.() ?? null });
     session.defaultSession.setPermissionCheckHandler(permissions.check);
     session.defaultSession.setPermissionRequestHandler(permissions.request);
     ipcMain.handle("smoke:page-mic", event => permissions.pageMicrophone(event));
@@ -78,12 +79,12 @@ async function run() {
         stream.getTracks().forEach(track => track.stop());
         return { tracks };
       }).catch(error => ({ error: error.name }))`, true);
-    const microphone = "navigator.mediaDevices.getUserMedia({audio:true})";
+    const micScript = "navigator.mediaDevices.getUserMedia({audio:true})";
     const camera = "navigator.mediaDevices.getUserMedia({video:true})";
     const display = "navigator.mediaDevices.getDisplayMedia({video:true,audio:false})";
     await win.loadURL(origin);
     assert.equal(await pageMic(), "allowed", "this computer's page is told the app allows it");
-    assert.deepEqual(await capture(microphone), { tracks: ["audio"] });
+    assert.deepEqual(await capture(micScript), { tracks: ["audio"] });
     assert.deepEqual(await capture(camera), { error: "NotAllowedError" });
     assert.ok((await capture(display)).error, "screen capture needs an intent");
     assert.equal(guard.begin(win.webContents.mainFrame), true);
@@ -92,37 +93,37 @@ async function run() {
     assert.deepEqual(displayDecisions, [false, true, false]);
     await win.loadURL(foreignOrigin);
     assert.equal(await pageMic(), "refused", "another server's page is told the app refused it");
-    assert.deepEqual(await capture(microphone), { error: "NotAllowedError" });
+    assert.deepEqual(await capture(micScript), { error: "NotAllowedError" });
     assert.equal(guard.begin(win.webContents.mainFrame), true);
     assert.ok((await capture(display)).error, "another origin must not capture");
     assert.deepEqual(displayDecisions, [false, true, false], "foreign capture must not reach source selection");
-    // The verified Cloud open in this window: the microphone, and nothing more.
-    await win.loadURL(cloudOrigin);
-    assert.equal(await pageMic(), "allowed", "the verified Cloud's page is told the app allows it");
-    assert.deepEqual(await capture(microphone), { tracks: ["audio"] });
+    // The active saved server the person allowed: the microphone, and nothing more.
+    await win.loadURL(remoteOrigin);
+    assert.equal(await pageMic(), "allowed", "the active server's page is told the app allows it");
+    assert.deepEqual(await capture(micScript), { tracks: ["audio"] });
     assert.deepEqual(await capture(camera), { error: "NotAllowedError" });
     assert.equal(guard.begin(win.webContents.mainFrame), true);
-    assert.ok((await capture(display)).error, "the Cloud must not capture the screen");
-    assert.deepEqual(displayDecisions, [false, true, false], "the Cloud's capture must not reach source selection");
-    // The first seconds after launch: the Cloud page is open before the saved
-    // sign-in has restored. Its microphone request waits, then is granted
-    // once the restore names this page's origin as the person's Cloud.
-    const restoreNaming = (page, named) => () => {
+    assert.ok((await capture(display)).error, "the remote server must not capture the screen");
+    assert.deepEqual(displayDecisions, [false, true, false], "the remote server's capture must not reach source selection");
+    // A microphone request before the person answered waits for that answer:
+    // allow grants it, deny refuses it after the same wait.
+    const answering = (page, allowed) => () => {
       waited.push(page);
-      return new Promise(resolve => setTimeout(() => { home = named; restoring = null; resolve(); }, 300));
+      return new Promise(resolve => setTimeout(() => { microphone = allowed; asking = null; resolve(); }, 300));
     };
-    await win.loadURL(laterCloudOrigin);
-    home = null;
-    restoring = restoreNaming("cloud", laterCloudOrigin);
-    assert.deepEqual(await capture(microphone), { tracks: ["audio"] }, "a Cloud page that asked early hears the microphone once the sign-in has restored");
-    assert.deepEqual(waited, ["cloud"], "the request waited for the restore, then was decided");
-    // A restore that ends without naming the page refuses it, after the same wait.
+    await win.loadURL(laterRemoteOrigin);
+    remote = laterRemoteOrigin;
+    microphone = false;
+    asking = answering("remote", true);
+    assert.deepEqual(await capture(micScript), { tracks: ["audio"] }, "a server page that asked early hears the microphone once the person allows");
+    assert.deepEqual(waited, ["remote"], "the request waited for the answer, then was decided");
     await win.loadURL(laterForeignOrigin);
-    home = null;
-    restoring = restoreNaming("foreign", laterCloudOrigin);
-    assert.deepEqual(await capture(microphone), { error: "NotAllowedError" });
-    assert.deepEqual(waited, ["cloud", "foreign"], "another server's page waited too, then was refused");
-    console.log(JSON.stringify({ electron: process.versions.electron, microphone: "allowed", camera: "denied", display: "intent-bound", foreignOrigin: "denied", cloudHome: "microphone only", cloudHomeBeforeRestore: "waits, then allowed" }));
+    remote = laterForeignOrigin;
+    microphone = false;
+    asking = answering("foreign", false);
+    assert.deepEqual(await capture(micScript), { error: "NotAllowedError" });
+    assert.deepEqual(waited, ["remote", "foreign"], "another server's page waited too, then was refused");
+    console.log(JSON.stringify({ electron: process.versions.electron, microphone: "allowed", camera: "denied", display: "intent-bound", foreignOrigin: "denied", remoteServer: "microphone only", remoteBeforeAnswer: "waits, then allowed" }));
   } finally {
     clearTimeout(timeout);
     win?.destroy();

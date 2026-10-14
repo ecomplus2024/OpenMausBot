@@ -123,13 +123,8 @@ describe("the places a conversation can be pinned to", () => {
   };
   afterEach(() => { fixture.config = null; });
 
-  it("reaches this computer and a Local VM on a desktop or self-hosted server", () => {
+  it("reaches this computer and a Local VM", () => {
     expect(availability()).toMatchObject({ cloud: true, vm: true, local: true });
-  });
-
-  it("never reaches them on an OMB Cloud home", () => {
-    fixture.config = { cloudHome: true };
-    expect(availability()).toMatchObject({ cloud: true, vm: false, local: false });
   });
 });
 

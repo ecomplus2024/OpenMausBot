@@ -12,10 +12,11 @@
 // moving parts — and no socket to leak when a turn is interrupted.
 //
 // The base URL is the caller's: ElevenLabs itself for the person's own key
-// (OMB_ELEVENLABS_API overrides it for dev and tests), Cloud Pro's relay for
-// its included token (included-services.ts). Only a key being saved is
-// verified, and that is always an own key.
-import { elevenLabsProviderApi } from "../included-services.ts";
+// (OMB_ELEVENLABS_API overrides it for dev and tests). Only a key being
+// saved is verified.
+const ELEVENLABS_API_DEFAULT = "https://api.elevenlabs.io/v1";
+export const elevenLabsProviderApi = (env: NodeJS.ProcessEnv = process.env): string =>
+  env.OMB_ELEVENLABS_API || ELEVENLABS_API_DEFAULT;
 
 const MODEL = "eleven_flash_v2_5";
 // 64kbps mono is indistinguishable for speech and a third of the bytes

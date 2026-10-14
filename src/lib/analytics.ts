@@ -121,7 +121,7 @@ function start(posthog: PostHog) {
   client = posthog;
   // Every event says which app sent it, and from where: this computer's own
   // page ("local"), or a server's page opened in it or in a browser
-  // ("server", My Cloud included), so a count can be made per release and
+  // ("server"), so a count can be made per release and
   // per surface. Registered before the first event.
   posthog.register({ app_version: appVersion(), surface: analyticsSurface() });
   const platform = navigator.userAgent.includes("Electron") ? "desktop" : "browser";

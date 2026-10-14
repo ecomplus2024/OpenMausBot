@@ -33,6 +33,7 @@ const assignmentSchema = z.object({
   depth: z.number().int().nonnegative(),
   origin: z.object({
     kind: z.enum(["person", "routine", "outside"]),
+    // "guest" is a retired Cloud-home source older databases may still hold.
     source: z.enum(["chat", "routine", "webhook", "relay", "external_runtime", "guest", "peer", "api"]),
     ref: z.string().optional(),
     quote: z.string().optional(),
@@ -174,7 +175,9 @@ function readAssignment(row: Row): Assignment {
   }
   const result = assignmentSchema.safeParse(parsed);
   if (!result.success) throw new Error(`runtime.db: assignment ${String(row.id)} does not match the record schema: ${result.error.message}`);
-  return result.data;
+  // the schema also admits the retired "guest" source (above) so an older
+  // database still reads; nothing writes it any more
+  return result.data as Assignment;
 }
 
 /** JSON drops undefined fields; the row read back must equal the row

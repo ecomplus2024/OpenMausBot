@@ -11,14 +11,11 @@
 //
 // The phone has two entries: Connect your phone, which opens the pairing
 // this window can do and says where the phone will connect (this computer,
-// your Cloud, this server), and Get the phone app (iPhone and Android). On
-// this computer, a paid Cloud that is Ready adds a Connect your phone line
-// of its own, first: to your Cloud, always on.
+// this server), and Get the phone app (iPhone and Android).
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   Check,
-  CircleUserRound,
   Download,
   Gauge,
   Info,
@@ -38,23 +35,18 @@ import { PhoneAppDialog } from "./PhoneAppDialog";
 import { SidebarPopoverMenu, type SidebarMenuItem } from "./SidebarPopoverMenu";
 import { ShortcutHint } from "./ShortcutHint";
 import { useSidebarPhoneStatus } from "./SidebarPhoneButton";
-import { useStore, type Action } from "@/state/store";
-import type { CloudAccountBridge, CloudAccountState } from "../../electron/cloud-account.mjs";
+import { useStore } from "@/state/store";
 import { useUpdaterState, type UpdaterState } from "@/lib/updater";
 import { brand } from "../lib/brand";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { FEEDBACK_URL, HELP_CENTER_URL, openExternalLink } from "@/lib/app-links";
 import {
-  cloudPhoneDestination,
   connectPhoneEntry,
   currentPhonePairingTarget,
   loadPhonePairingAccess,
-  phoneDestinations,
   phonePairingSettingsAction,
-  type CloudPhoneDestination,
   type ConnectPhoneEntry,
-  type PhoneDestination,
   type PhonePairingAccess,
 } from "@/lib/phone-pairing";
 
@@ -101,7 +93,7 @@ export function updateLabel(phase: UpdatePhase, state: UpdaterState | null): str
     case "preparing":
       return t("sidebar.update.preparing");
     case "downloaded":
-      // Named: on My Cloud's page it is this app that restarts, not the Cloud.
+      // Named: on a server's page it is this app that restarts, not the server.
       // An unknown version leaves a double space behind, in every language.
       return (
         state?.installMode === "handoff"
@@ -216,8 +208,8 @@ export function useUpdateItem(): UpdateEntry | null {
 
 /** Connect your phone for this window, once it is known whether this
  * session may pair one. This computer's own phone flow needs no asking. */
-function useConnectPhoneEntry(cloudHome: boolean): ConnectPhoneEntry | null {
-  const target = currentPhonePairingTarget(cloudHome);
+function useConnectPhoneEntry(): ConnectPhoneEntry | null {
+  const target = currentPhonePairingTarget();
   const [access, setAccess] = useState<PhonePairingAccess | null>(null);
   useEffect(() => {
     if (target === "computer") return;
@@ -232,63 +224,36 @@ function useConnectPhoneEntry(cloudHome: boolean): ConnectPhoneEntry | null {
   return connectPhoneEntry(target, access);
 }
 
-/** On this computer only: the person's Cloud as a phone destination, from
- * the verified native snapshot (null elsewhere, signed out, or no plan). */
-export function useCloudPhoneDestination(enabled: boolean): { cloud: CloudPhoneDestination; bridge?: CloudAccountBridge } {
-  const bridge = enabled && !window.ogb?.remoteClient?.active ? window.ogb?.cloudAccount : undefined;
-  const [account, setAccount] = useState<CloudAccountState | null>(null);
-  useEffect(() => {
-    if (!bridge) return;
-    let active = true, updated = false;
-    const unsubscribe = bridge.onState((next) => { updated = true; if (active) setAccount(next); });
-    // Reads the native snapshot only; never signs in, refreshes or connects.
-    void bridge.state().then((next) => { if (active && !updated) setAccount(next); }).catch(() => {});
-    return () => { active = false; unsubscribe(); };
-  }, [bridge]);
-  return bridge ? { cloud: cloudPhoneDestination(account), bridge } : { cloud: null };
-}
-
-/** What choosing a destination does. Here: Settings → Remote access on this
- * window's pairing. Cloud: open the Cloud in this window on its phone
- * pairing, as Settings → OMB Cloud's Use your Cloud on your phone does; if
- * that fails, Settings → OMB Cloud, which says what to do. */
-export function selectPhoneDestination(destination: PhoneDestination, { bridge, dispatch }: { bridge?: Pick<CloudAccountBridge, "connectHomeForPhone">; dispatch: (action: Action) => void }): void {
-  if (destination.id !== "cloud" || !bridge) {
-    dispatch(phonePairingSettingsAction());
-    return;
-  }
-  void bridge.connectHomeForPhone().catch(() => dispatch({ type: "toggleAppSettings", open: true, section: "cloudAccount" }));
-}
-
-/** The phone entries at the top of the menu: a Connect your phone line per
- * destination, then Get the phone app. Connect your phone is absent where
- * this window cannot pair one (a chat-only session, a server whose people
- * sign in through their organization). */
+/** The phone entries at the top of the menu: Connect your phone, then Get
+ * the phone app. Connect your phone is absent where this window cannot pair
+ * one (a chat-only session, a server whose people sign in through their
+ * organization). */
 export function phoneMenuItems({
-  destinations,
+  entry,
   connected,
   onConnect,
   onGetApp,
 }: {
-  destinations: PhoneDestination[];
+  entry: ConnectPhoneEntry | null;
   /** a phone is connected to this computer right now */
   connected: boolean;
-  onConnect: (destination: PhoneDestination) => void;
+  onConnect: () => void;
   onGetApp: () => void;
 }): SidebarMenuItem[] {
   return [
-    ...destinations.map((destination) => ({
-      key: destination.id === "cloud" ? "connect-phone-cloud" : "connect-phone",
-      label: t("sidebar.menu.connectPhone"),
-      subtitle: t(destination.subtitleKey),
-      ...(destination.noteKey ? { note: t(destination.noteKey) } : {}),
-      icon: <Smartphone size={18} />,
-      trailing:
-        destination.id === "here" && destination.target === "computer" && connected ? (
-          <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />
-        ) : undefined,
-      onSelect: () => onConnect(destination),
-    } satisfies SidebarMenuItem)),
+    ...(entry
+      ? [{
+          key: "connect-phone",
+          label: t("sidebar.menu.connectPhone"),
+          subtitle: t(entry.subtitleKey),
+          icon: <Smartphone size={18} />,
+          trailing:
+            entry.target === "computer" && connected ? (
+              <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />
+            ) : undefined,
+          onSelect: onConnect,
+        } satisfies SidebarMenuItem]
+      : []),
     {
       key: "phone-app",
       label: t("sidebar.menu.getPhoneApp"),
@@ -305,28 +270,23 @@ export function profileMenuItems({
   phone,
   usage,
   update,
-  account,
   onUsage,
   onSettings,
   onShortcuts,
   onAbout,
   onHelp,
   onFeedback,
-  onAccount,
 }: {
   phone: SidebarMenuItem[];
   /** Settings has a Usage page here (not on a remote server's window) */
   usage: boolean;
   update: SidebarMenuItem | null;
-  /** the account this app signs in to (OpenMausBot Cloud), when it has one here */
-  account: string | null;
   onUsage: () => void;
   onSettings: () => void;
   onShortcuts: () => void;
   onAbout: () => void;
   onHelp: () => void;
   onFeedback: () => void;
-  onAccount: () => void;
 }): SidebarMenuItem[] {
   const help: SidebarMenuItem[] = [
     { key: "help", label: t("sidebar.menu.help"), icon: <HelpCircle size={18} />, onSelect: onHelp },
@@ -346,18 +306,13 @@ export function profileMenuItems({
     { key: "support", label: t("sidebar.menu.support"), icon: <LifeBuoy size={18} />, submenu: help, onSelect: () => {} },
     { key: "settings", label: t("sidebar.menu.settings"), icon: <SettingsIcon size={18} />, onSelect: onSettings },
     ...(update ? [update] : []),
-    ...(account
-      ? [{ key: "account", label: account, icon: <CircleUserRound size={18} />, separatorBefore: true, onSelect: onAccount }]
-      : []),
   ];
 }
 
 export function SidebarProfileMenu({ iconOnly = false }: { iconOnly?: boolean } = {}) {
   const { state, dispatch } = useStore();
   const phone = useSidebarPhoneStatus();
-  const connectPhone = useConnectPhoneEntry(state.config?.cloudHome === true);
-  const cloudPhone = useCloudPhoneDestination(connectPhone?.target === "computer");
-  const destinations = phoneDestinations(connectPhone, cloudPhone.cloud);
+  const connectPhone = useConnectPhoneEntry();
   const update = useUpdateItem();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [phoneAppOpen, setPhoneAppOpen] = useState(false);
@@ -365,21 +320,18 @@ export function SidebarProfileMenu({ iconOnly = false }: { iconOnly?: boolean } 
 
   const profile = state.config?.profile;
   const name = profileLabel(profile);
-  const connectTo = (destination: PhoneDestination) => selectPhoneDestination(destination, { bridge: cloudPhone.bridge, dispatch });
+  const connectTo = () => dispatch(phonePairingSettingsAction());
   const remote = window.ogb?.remoteClient?.active === true;
-  // the same rule Settings uses to show its OpenMausBot Cloud page
-  const cloudAccount = !remote && Boolean(window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true));
 
   const items = profileMenuItems({
     phone: phoneMenuItems({
-      destinations,
+      entry: connectPhone,
       connected: phone.kind === "connected",
       onConnect: connectTo,
       onGetApp: () => setPhoneAppOpen(true),
     }),
     usage: !remote,
     update: update?.item ?? null,
-    account: cloudAccount ? t("settings.section.cloudAccount") : null,
     onUsage: () => dispatch({ type: "toggleAppSettings", open: true, section: "usage" }),
     onSettings: () => dispatch({ type: "toggleAppSettings" }),
     onShortcuts: () => {
@@ -390,7 +342,6 @@ export function SidebarProfileMenu({ iconOnly = false }: { iconOnly?: boolean } 
     onAbout: () => setAboutOpen(true),
     onHelp: () => void openExternalLink(HELP_CENTER_URL),
     onFeedback: () => void openExternalLink(FEEDBACK_URL),
-    onAccount: () => dispatch({ type: "toggleAppSettings", open: true, section: "cloudAccount" }),
   });
   const noteworthy = update && updateNoteworthy(update.phase, update.pending) && !updateHasButton(update.phase);
 
@@ -451,11 +402,7 @@ export function SidebarProfileMenu({ iconOnly = false }: { iconOnly?: boolean } 
       <PhoneAppDialog
         open={phoneAppOpen}
         onClose={() => setPhoneAppOpen(false)}
-        connect={destinations.map((destination) => ({
-          key: destination.id,
-          subtitle: t(destination.subtitleKey),
-          onSelect: () => connectTo(destination),
-        }))}
+        connect={connectPhone ? [{ key: "here", subtitle: t(connectPhone.subtitleKey), onSelect: connectTo }] : []}
       />
     </>
   );

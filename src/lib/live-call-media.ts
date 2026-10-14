@@ -39,8 +39,6 @@ export interface LiveMediaState {
   notice: string | null;
   /** the server has no OpenAI key; show the key form */
   needsKey: boolean;
-  /** Live calls need a Pro plan; show the Pro card (never the key form) */
-  needsPro: boolean;
   busyWith: LiveCallState | null;
   /** a stopped call's one action, only where it can help: never for a busy
    * line, a window without WebRTC or a sign-in that ended */
@@ -69,7 +67,7 @@ export interface LiveMediaDeps {
 
 const IDLE: LiveMediaState = {
   phase: "idle", callId: null, botId: null, threadId: null, startedAt: null, muted: false,
-  caption: "", heard: "", notice: null, needsKey: false, needsPro: false, busyWith: null, action: null, hangingUp: false,
+  caption: "", heard: "", notice: null, needsKey: false, busyWith: null, action: null, hangingUp: false,
 };
 const CAPTION_CHARS = 240;
 const HEARD_CHARS = 160;
@@ -200,10 +198,10 @@ function inWebBrowser(capabilities: DesktopCapabilities): boolean {
 
 /** Who blocked the microphone, and the one thing that helps. The desktop app
  * says whether it lets this page use the microphone (`pageMic`): a page it
- * refused can make the call in a web browser. An older app does not say; it
- * refused every server's page but a verified Cloud, so a server's page counts
- * as refused there too. Otherwise the browser (per site) or the computer's
- * privacy settings blocked it: allow it there, then try again. */
+ * refused can make the call in a web browser. An older app does not say, so
+ * a server's page counts as refused there too. Otherwise the browser (per
+ * site) or the computer's privacy settings blocked it: allow it there, then
+ * try again. */
 function micBlocked(capabilities: DesktopCapabilities, pageMic: "allowed" | "refused" | undefined): { notice: string; action: LiveCallAction } {
   if (pageMic === "refused" || (pageMic === undefined && capabilities.dictation.reasonCode === "remote-server")) {
     return { notice: t("call.live.micAppRefused"), action: "open-in-browser" };
@@ -212,8 +210,8 @@ function micBlocked(capabilities: DesktopCapabilities, pageMic: "allowed" | "ref
 }
 
 /** Which app this window's call says holds the microphone: a web browser,
- * or the desktop app (its own page, or a server's page in it, such as My
- * Cloud). The harness reports it to a busy line elsewhere. */
+ * or the desktop app (its own page, or a server's page in it). The harness
+ * reports it to a busy line elsewhere. */
 function liveClient(capabilities: DesktopCapabilities): "desktop" | "web" {
   return inWebBrowser(capabilities) ? "web" : "desktop";
 }
@@ -292,12 +290,10 @@ export async function startLiveCall(target: { botId: string; threadId: string })
     }
   } catch (error) {
     if (mine !== generation) return;
-    const body = error instanceof ApiError ? (error.body as { needsKey?: boolean; needsPro?: boolean; activeCall?: LiveCallState } | undefined) : undefined;
+    const body = error instanceof ApiError ? (error.body as { needsKey?: boolean; activeCall?: LiveCallState } | undefined) : undefined;
     // the session exists but this window cannot join it: free the harness's one call
     if (state.callId) void endOnServer(state.callId);
     release();
-    // The harness refuses a start without Pro before it would ask for a key.
-    if (body?.needsPro) return set({ ...IDLE, needsPro: true, botId: target.botId, threadId: target.threadId });
     if (body?.needsKey) return set({ ...IDLE, needsKey: true, botId: target.botId, threadId: target.threadId });
     if (body?.activeCall) return set({ ...IDLE, phase: "failed", botId: target.botId, threadId: target.threadId, busyWith: body.activeCall, notice: busyText(body.activeCall) });
     const failed = { ...IDLE, phase: "failed" as const, botId: target.botId, threadId: target.threadId };
@@ -368,11 +364,11 @@ export function handleLiveCallKey(event: ChordEvent, isMac: boolean): boolean {
   return true;
 }
 
-/** Drop the prompt a refused start left for this bot, the key form or the
- * Pro card (its chat was left or the prompt closed), so it does not open
- * again by itself later. */
+/** Drop the prompt a refused start left for this bot, the key form (its
+ * chat was left or the prompt closed), so it does not open again by itself
+ * later. */
 export function dismissStartPrompt(botId: string): void {
-  if ((state.needsKey || state.needsPro) && state.botId === botId) dismissLiveNotice();
+  if (state.needsKey && state.botId === botId) dismissLiveNotice();
 }
 
 /** The stopped call's one action: call this bot again, or open this page in
@@ -387,7 +383,7 @@ export function takeLiveCallAction(): void {
 export function dismissLiveNotice(): void {
   if (noticeTimer) clearTimeout(noticeTimer);
   noticeTimer = null;
-  if (state.phase === "ended" || state.phase === "failed" || state.needsKey || state.needsPro) set({ ...IDLE });
+  if (state.phase === "ended" || state.phase === "failed" || state.needsKey) set({ ...IDLE });
 }
 
 /** The harness refused this window's sign-in (it was signed out or

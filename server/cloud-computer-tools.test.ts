@@ -31,7 +31,6 @@ beforeAll(async () => {
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("fixture did not bind");
   vi.stubEnv("OMB_BOX_API", `http://127.0.0.1:${address.port}`);
-  vi.stubEnv("OMB_CLOUD_BOAT_TOKEN", undefined);
   tools = await import("./cloud-computer-tools.ts");
 });
 beforeEach(() => { calls.length = 0; holdCommand = false; commandStarted = undefined; });

@@ -1,6 +1,6 @@
 // Copy this computer here (docs/copy-workspace.md): a person's copy of their
-// desktop's workspace onto a server they own and added in the desktop app, an
-// OMB Cloud home included. The desktop exports the ordinary encrypted
+// desktop's workspace onto a server they own and added in the desktop app.
+// The desktop exports the ordinary encrypted
 // workspace backup (workspace-backup.ts) and uploads it here in parts; this
 // server then previews and restores it like any other backup, so everything
 // that backup policy keeps out (credentials, sign-ins, pairing and sessions,

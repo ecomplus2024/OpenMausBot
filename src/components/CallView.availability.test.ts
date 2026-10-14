@@ -34,7 +34,7 @@ describe("call capability guidance", () => {
     }), true)).toBeNull();
   });
 
-  // The Mac app on a server's page (My Cloud): taking turns works on This
+  // The Mac app on a server's page: taking turns works on This
   // computer, but the help sends nobody there. Leaving would leave the bot
   // being called; the call on this page is Live.
   it("says where taking turns works on a server's page in the Mac app, with no trip there", () => {

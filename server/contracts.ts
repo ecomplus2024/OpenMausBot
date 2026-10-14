@@ -128,15 +128,6 @@ export interface SendTurnInput {
   approvalMode?: ApprovalMode;
   /** Fresh owner selection, independent of execution approval and resume state. */
   toolScope?: ToolScope;
-  /** A guest drives this turn on an OMB Cloud home: it runs with no shell
-   * or command execution and reads nothing outside its own folder. Sent
-   * only to a driver whose capabilities.guestTurns is "confined"; the harness
-   * refuses the turn for any other (docs/cloud-pro.md). */
-  guestConfined?: boolean;
-  /** Why this turn is confined, in the owner's words, for a refusal to end
-   * with (on a personal Cloud home, what came before it: a routine or a
-   * conversation from before this update). */
-  confinedWhy?: string;
   /** Images attached to this user turn only. They are deliberately kept out
    * of replay transcripts: the provider's native session owns earlier image
    * context, while a fresh replay retains the visible attachment marker. */
@@ -336,11 +327,6 @@ export interface ProviderAdapter {
      * engine (integrations.hooks). Only Claude Code today; other engines
      * deliver the same information through their protocols. */
     hooks?: boolean;
-    /** How a guest-driven turn on an OMB Cloud home can run on this engine:
-     * "confined" = sendTurn honours `guestConfined` (no shell or command
-     * execution, no reads outside its folder). Absent: such a turn is
-     * refused. */
-    guestTurns?: "confined";
   };
   sendTurn(input: SendTurnInput): Promise<TurnStartResult>;
   interruptTurn(threadId: ThreadId, turnId?: TurnId): Promise<void>;

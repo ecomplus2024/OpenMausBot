@@ -94,10 +94,10 @@ describe("live call media", () => {
 
   // The harness names where a running call is from what the starting
   // window said it is, so a busy line elsewhere reads true. A server's page
-  // in the desktop app (My Cloud) is still the desktop app.
+  // in the desktop app is still the desktop app.
   it.each([
     ["the Mac app's own page", "desktop", { available: true, engine: "apple-speech", onDevice: true }],
-    ["My Cloud in the desktop app", "desktop", { reasonCode: "remote-server" }],
+    ["a server's page in the desktop app", "desktop", { reasonCode: "remote-server" }],
     ["the Windows app", "desktop", { reasonCode: "unsupported-platform" }],
     ["a web browser", "web", { reasonCode: "desktop-app-required" }],
   ] as const)("from %s, starts a %s call", async (_where, client, dictation) => {
@@ -120,35 +120,20 @@ describe("live call media", () => {
     expect(currentCall()).toBeNull();
   });
 
-  // Live calls need a Pro plan; the harness says so before it would ask for a key.
-  it("shows the Pro prompt, never the key form, and releases the microphone", async () => {
-    request.mockRejectedValueOnce(new ApiError("Live calls need a Pro plan.", 402, { needsPro: true }));
-    await startLiveCall({ botId: "b1", threadId: "t1" });
-    expect(liveMedia()).toMatchObject({ phase: "idle", needsPro: true, needsKey: false, botId: "b1", threadId: "t1", notice: null, action: null });
-    expect(track.stopped).toBe(true);
-    expect(peer.closed).toBe(true);
-    expect(currentCall()).toBeNull();
-    // no session exists, so there is nothing to end on the harness
-    expect(endRequests()).toEqual([]);
-    // the next call starts clean
-    await startLiveCall({ botId: "b1", threadId: "t1" });
-    expect(liveMedia()).toMatchObject({ phase: "starting", needsPro: false, callId: "c1" });
-  });
-
   it("says who is on the line when another call runs", async () => {
     const other = { ...call, callId: "c0", client: "ios", status: "live" } as const;
     request.mockRejectedValueOnce(new ApiError("A Live call is already running.", 409, { activeCall: other }));
     await startLiveCall({ botId: "b1", threadId: "t1" });
     expect(liveMedia()).toMatchObject({ phase: "failed", busyWith: other });
     expect(track.stopped).toBe(true);
-    // a call from a web browser (a Cloud's page) is not "on this computer"
+    // a call from a web browser (a server's page) is not "on this computer"
     request.mockRejectedValueOnce(new ApiError("A Live call is already running.", 409, { activeCall: { ...other, client: "web" } }));
     await startLiveCall({ botId: "b1", threadId: "t1" });
     expect(liveMedia().notice).toBe("Another Live call is running in a web browser. Hang up there first.");
   });
 
-  // The desktop app holds a call on This computer, or on My Cloud (its page
-  // in the app). A browser on another machine reaches the same Cloud, so the
+  // The desktop app holds a call on This computer, or on a server (its page
+  // in the app). A browser on another machine reaches the same server, so the
   // busy line names the app, never "this computer", which is not where the
   // call is. The harness also runs on Linux and Windows: never "Mac".
   it.each([
@@ -533,15 +518,6 @@ describe("live call media", () => {
     expect(liveMedia()).toMatchObject({ needsKey: true, botId: "b1" });
     dismissStartPrompt("b1");
     expect(liveMedia()).toMatchObject({ phase: "idle", needsKey: false, botId: null });
-  });
-
-  it("drops the Pro prompt only for the bot it was left for", async () => {
-    request.mockRejectedValueOnce(new ApiError("Live calls need a Pro plan.", 402, { needsPro: true }));
-    await startLiveCall({ botId: "b1", threadId: "t1" });
-    dismissStartPrompt("b2");
-    expect(liveMedia()).toMatchObject({ needsPro: true, botId: "b1" });
-    dismissStartPrompt("b1");
-    expect(liveMedia()).toMatchObject({ phase: "idle", needsPro: false, botId: null });
   });
 
   it("plays blocked audio on the next click and clears the hint", async () => {

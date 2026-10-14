@@ -14,13 +14,13 @@ const render = (items: Parameters<typeof SidebarPopoverMenu>[0]["items"]) =>
 
 it("draws an item's second line (where it connects) and third line (a note) under its label", () => {
   const html = render([
-    { key: "cloud", label: "Connect your phone", subtitle: "to your Cloud (always on)", onSelect: () => {} },
-    { key: "here", label: "Connect your phone", subtitle: "to this computer", note: "Your Cloud shows here once it is ready.", onSelect: () => {} },
+    { key: "server", label: "Connect your phone", subtitle: "to a server (always on)", onSelect: () => {} },
+    { key: "here", label: "Connect your phone", subtitle: "to this computer", note: "A paired server shows here once it is ready.", onSelect: () => {} },
     { key: "plain", label: "Settings", onSelect: () => {} },
   ]);
-  expect(html).toMatch(/Connect your phone<\/span><span[^>]*>to your Cloud \(always on\)<\/span>/);
-  expect(html).toMatch(/to this computer<\/span><span[^>]*>Your Cloud shows here once it is ready\.<\/span>/);
-  expect(html.indexOf("to your Cloud (always on)")).toBeLessThan(html.indexOf("to this computer"));
+  expect(html).toMatch(/Connect your phone<\/span><span[^>]*>to a server \(always on\)<\/span>/);
+  expect(html).toMatch(/to this computer<\/span><span[^>]*>A paired server shows here once it is ready\.<\/span>/);
+  expect(html.indexOf("to a server (always on)")).toBeLessThan(html.indexOf("to this computer"));
   expect(html).toContain('<span class="flex-1 truncate">Settings</span>');
 });
 

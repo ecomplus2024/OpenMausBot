@@ -49,18 +49,17 @@ export function needsCli(instance: InstanceInfo | undefined): boolean {
 }
 
 /** A terminal opened from this page runs on the machine the server runs on:
- * the desktop app's own window on its own server. Never a browser, a paired
- * remote client, or My Cloud, where a terminal command is a dead end. */
-export function serverTerminal(cloudHome: boolean): boolean {
-  return Boolean(window.ogb?.openInstallTerminal) && window.ogb?.remoteClient?.active !== true && !cloudHome;
+ * the desktop app's own window on its own server. Never a browser or a
+ * paired remote client, where a terminal command is a dead end. */
+export function serverTerminal(): boolean {
+  return Boolean(window.ogb?.openInstallTerminal) && window.ogb?.remoteClient?.active !== true;
 }
 
-/** Grok Build cannot run here (no Grok CLI on this server, an older Cloud
- * computer image for one) and nobody here can install it. Its models are
- * still an xAI API key away, so the card says that instead of handing over
- * an install command that cannot run. */
-export function grokKeyInstead(instance: InstanceInfo, cloudHome: boolean): boolean {
-  return instance.driverKind === "grokAgent" && needsCli(instance) && !serverTerminal(cloudHome);
+/** Grok Build cannot run here and nobody here can install it. Its models
+ * are still an xAI API key away, so the card says that instead of handing
+ * over an install command that cannot run. */
+export function grokKeyInstead(instance: InstanceInfo): boolean {
+  return instance.driverKind === "grokAgent" && needsCli(instance) && !serverTerminal();
 }
 
 export function CommandRow({
@@ -75,7 +74,7 @@ export function CommandRow({
   allowTerminal?: boolean;
 }) {
   const [status, setStatus] = useState<"copied" | "failed" | "opened" | null>(null);
-  const canOpen = typeof window !== "undefined" && allowTerminal && serverTerminal(false);
+  const canOpen = typeof window !== "undefined" && allowTerminal && serverTerminal();
 
   const settle = (next: "copied" | "failed" | "opened") => {
     setStatus(next);
@@ -182,7 +181,7 @@ export function CommandRow({
  * server, as the server's own user, into the app's own folder. The terminal
  * command stays behind a disclosure for people who prefer it. */
 function ServerEngineInstall({ instance, mode, command }: { instance: InstanceInfo; mode: "install" | "update"; command: string | null }) {
-  const { state, dispatch, refreshModels } = useStore();
+  const { dispatch, refreshModels } = useStore();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -226,7 +225,7 @@ function ServerEngineInstall({ instance, mode, command }: { instance: InstanceIn
       {command && (
         <details className="rounded-lg border border-hairline/50 bg-app px-2.5 py-2 text-[11.5px] text-ink-secondary">
           <summary className="cursor-pointer select-none">{t("engineSetup.preferTerminal")}</summary>
-          <CommandRow command={command} actionLabel={t(mode === "update" ? "engineSetup.openUpdate" : "engineSetup.openInstall")} compact allowTerminal={state.config?.cloudHome !== true} />
+          <CommandRow command={command} actionLabel={t(mode === "update" ? "engineSetup.openUpdate" : "engineSetup.openInstall")} compact />
         </details>
       )}
     </div>
@@ -523,8 +522,6 @@ export function EngineSetup({
    * model that runs this CLI with the organisation's access). */
   description?: string;
 }) {
-  const { state } = useStore();
-  const cloudHome = state.config?.cloudHome === true;
   const install = instance.install;
   const installCommand = installCommandFor(install);
   const signInCommand = install?.signInCommand;
@@ -561,7 +558,7 @@ export function EngineSetup({
     return <ApiKeyEngineSetup instance={instance} className={className} unframed={unframed} />;
   }
 
-  if (intent === "cloud" && grokKeyInstead(instance, cloudHome)) {
+  if (intent === "cloud" && grokKeyInstead(instance)) {
     return <GrokKeyInstead className={className} unframed={unframed} />;
   }
 
@@ -601,7 +598,7 @@ export function EngineSetup({
           <DeviceSignIn key={instance.instanceId} instanceId={instance.instanceId} browserPkce={browserSignIn} provider={provider} />
           {/* Grok keeps its terminal sign-in for people who prefer one, where
               a terminal runs on this server; the code above needs none. */}
-          {deviceSignIn && provider === "grok" && signInCommand && serverTerminal(cloudHome) && (
+          {deviceSignIn && provider === "grok" && signInCommand && serverTerminal() && (
             <details className="mt-2 rounded-lg border border-hairline/50 bg-app px-2.5 py-2 text-[11.5px] text-ink-secondary">
               <summary className="cursor-pointer select-none">{t("engineSetup.preferTerminal")}</summary>
               <CommandRow command={signInCommand} actionLabel={t("engineSetup.openSignIn")} compact />
@@ -618,7 +615,6 @@ export function EngineSetup({
         <CommandRow
           command={command}
           actionLabel={signInOnly ? t("engineSetup.openSignIn") : t("engineSetup.openInstall")}
-          allowTerminal={!cloudHome}
         />
       ) : (
         <p className="mt-3 rounded-lg bg-inset px-2.5 py-2 text-[12px] leading-relaxed text-ink-secondary">

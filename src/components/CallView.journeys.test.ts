@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
-// Calling a bot from a Cloud, the way a person does it, in a real page.
+// Calling a bot from another server, the way a person does it, in a real page.
 //
 // Taking turns listens with the Mac app's own on-device speech recognition,
 // so only the Mac app's page for This computer can take turns. Everywhere
-// else (a browser, the Windows or Linux app, any server's page such as My
-// Cloud) a one-to-one chat's call button is a Live call: no amber dot, no
+// else (a browser, the Windows or Linux app, any server's page)
+// a one-to-one chat's call button is a Live call: no amber dot, no
 // "Call unavailable" and no trip to This computer, which would leave the bot
 // being called. A Live call asks for the microphone first, so a page that
 // can't have one says so (and how to make the call) before anyone pastes a
@@ -80,9 +80,9 @@ let liveKey: string;
 let microphone: "allowed" | "refused";
 
 /** The desktop app on `platform`, showing This computer's page or a server's
- * page (My Cloud): the bridge its preload gives that page, and what the app
+ * page: the bridge its preload gives that page, and what the app
  * reports the page can do. */
-function desktopApp(platform: Platform, page: "this-computer" | "my-cloud"): { bridge: Bridge; desktop: Desktop } {
+function desktopApp(platform: Platform, page: "this-computer" | "server"): { bridge: Bridge; desktop: Desktop } {
   let bridge: Bridge | undefined;
   runInNewContext(PRELOAD, {
     process: { platform, argv: [`--omb-local-origin=${LOCAL_ORIGIN}`] },
@@ -95,7 +95,7 @@ function desktopApp(platform: Platform, page: "this-computer" | "my-cloud"): { b
       ipcRenderer: { on() {}, removeListener() {}, send() {}, invoke: async (channel: string, ...args: unknown[]) => answer(channel, args) },
     }),
   });
-  const capabilities = desktopCapabilities({ platform, remote: page === "my-cloud", env: {}, homeDir: "/Users/ada" });
+  const capabilities = desktopCapabilities({ platform, remote: page === "server", env: {}, homeDir: "/Users/ada" });
   return { bridge: bridge!, desktop: { capabilities, ready: true } };
 }
 /** The desktop app's main process, for the channels these calls use. */
@@ -127,9 +127,7 @@ const room = {
   bulletin: "", unread: false, createdAt: 1, messages: [],
 } as unknown as Group;
 const noKey = { configured: false, voice: "marin", readTypedReplies: true, idleMinutes: 5 };
-/** The person's own Cloud: the voice comes with the plan, Live has no key yet. */
-const CLOUD = { cloudHome: true, tts: { configured: true, ready: true, voice: "preset" }, live: noKey } as AppState["config"];
-/** Someone else's server, saved in the app's server menu. */
+/** Another server, saved in the app's server menu: the voice is configured there, Live has no key yet. */
 const SERVER = { tts: { configured: true, ready: true, voice: "preset" }, live: noKey } as AppState["config"];
 const THIS_COMPUTER = { tts: { configured: true, ready: true, voice: "voice-1" }, live: noKey } as AppState["config"];
 const KEY_FORM = "Live calls use OpenAI GPT-Live";
@@ -197,7 +195,7 @@ async function firstLiveCall(savedBy: "the server" | "the app") {
   await vi.waitFor(() => expect(liveKey).toBe("sk-live-test"));
   const saves = invoked.filter(({ channel }) => channel === "credential:set");
   if (savedBy === "the server") {
-    // saved where the page runs: the Cloud (or server) keeps the key
+    // saved where the page runs: the server keeps the key
     expect(requests).toContainEqual({ path: "/api/config", method: "PUT", body: { live: { key: "sk-live-test" } } });
     expect(saves).toEqual([]);
   } else {
@@ -260,14 +258,14 @@ beforeEach(() => {
   pageMic = undefined;
   liveKey = "";
   microphone = "allowed";
-  // The computer behind the page (a Cloud, a server, or this one's own).
+  // The computer behind the page (a server, or this one's own).
   vi.stubGlobal("fetch", async (path: string, init: RequestInit = {}) => {
     const method = init.method ?? "GET";
     const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
     requests.push({ path, method, body });
     if (path === "/api/config" && method === "PUT") {
       liveKey = body.live.key;
-      return new Response(JSON.stringify({ ...CLOUD, live: { ...noKey, configured: true } }), { status: 200 });
+      return new Response(JSON.stringify({ ...SERVER, live: { ...noKey, configured: true } }), { status: 200 });
     }
     if (path === "/api/live/session" && method === "POST") {
       // no plan includes a key: the server says so before calling OpenAI
@@ -298,24 +296,24 @@ afterEach(() => {
 });
 
 describe("calling a bot off the Mac", () => {
-  it("in a browser on the person's Cloud, the first visit's call button is a Live call that asks for the key once and calls", async () => {
+  it("in a browser on a server, the first visit's call button is a Live call that asks for the key once and calls", async () => {
     expect(callMode()).toBe("turns");
-    chat(CLOUD);
+    chat(SERVER);
     await firstLiveCall("the server");
     expect(requests.filter((request) => request.method !== "GET").map(({ path, method }) => `${method} ${path}`))
       .toEqual(["POST /api/live/session", "PUT /api/config", "POST /api/live/session"]);
   });
 
-  it("on My Cloud in the Mac app, the call is Live, and Take turns says it works on This computer", async () => {
-    open(desktopApp("darwin", "my-cloud"));
-    chat(CLOUD);
+  it("on a server's page in the Mac app, the call is Live, and Take turns says it works on This computer", async () => {
+    open(desktopApp("darwin", "server"));
+    chat(SERVER);
     expectTurnsDisabled("Calls where you take turns work on This computer. They listen with your Mac's own speech recognition, which only This computer can use.");
     await firstLiveCall("the server");
   });
 
-  it.each(["win32", "linux"] as const)("on My Cloud in the %s app, the call is Live, and Take turns says it needs the Mac app", async (platform) => {
-    open(desktopApp(platform, "my-cloud"));
-    chat(CLOUD);
+  it.each(["win32", "linux"] as const)("on a server's page in the %s app, the call is Live, and Take turns says it needs the Mac app", async (platform) => {
+    open(desktopApp(platform, "server"));
+    chat(SERVER);
     expectTurnsDisabled("Calls where you take turns need the Mac app");
     await firstLiveCall("the server");
   });
@@ -328,18 +326,17 @@ describe("calling a bot off the Mac", () => {
     await firstLiveCall("the app");
   });
 
-  // Desktop apps up to 0.1.95 refuse every server's page the microphone, and
-  // later ones refuse any page but a verified My Cloud. The call says so,
-  // with the way to make it, before anyone pastes a key it can't use here.
+  // A desktop app that refuses a server's page the microphone: the call says
+  // so, with the way to make it, before anyone pastes a key it can't use here.
   it.each([
-    ["My Cloud in a Mac app that doesn't say", "darwin", CLOUD, undefined],
-    ["My Cloud in a Windows app that refused it", "win32", CLOUD, "refused"],
-    ["another server in the Linux app", "linux", SERVER, "refused"],
-  ] as const)("on %s, a refused microphone says so with Open in browser, and no key is asked for", async (_where, platform, config, answer) => {
+    ["a server in a Mac app that doesn't say", "darwin", undefined],
+    ["a server in a Windows app that refused it", "win32", "refused"],
+    ["a server in the Linux app", "linux", "refused"],
+  ] as const)("on %s, a refused microphone says so with Open in browser, and no key is asked for", async (_where, platform, answer) => {
     microphone = "refused";
     pageMic = answer;
-    open(desktopApp(platform, "my-cloud"));
-    chat(config);
+    open(desktopApp(platform, "server"));
+    chat(SERVER);
     press(callButton());
     await vi.waitFor(() => expect(text()).toContain(APP_REFUSED));
     expect(getUserMedia).toHaveBeenCalledTimes(1);
@@ -386,12 +383,12 @@ describe("calling a bot off the Mac", () => {
   });
 
   it("shows a room's call button only where taking turns can run: the Mac app's own page", () => {
-    roomHeader(CLOUD);
+    roomHeader(SERVER);
     expect(callButton()).toBeNull();
     for (const platform of ["darwin", "win32", "linux"] as const) {
-      open(desktopApp(platform, "my-cloud"));
-      roomHeader(CLOUD);
-      expect(callButton(), `${platform} on My Cloud`).toBeNull();
+      open(desktopApp(platform, "server"));
+      roomHeader(SERVER);
+      expect(callButton(), `${platform} on a server`).toBeNull();
     }
     for (const platform of ["win32", "linux"] as const) {
       open(desktopApp(platform, "this-computer"));

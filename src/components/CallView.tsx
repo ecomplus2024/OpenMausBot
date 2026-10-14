@@ -36,7 +36,6 @@ import { usePushToTalk } from "@/lib/push-to-talk";
 import { BotAvatar } from "./Avatar";
 import { navigateThreadMenu } from "./BotProjects";
 import { LiveKeySetup } from "./LiveKeySetup";
-import { LiveProPrompt } from "./ProIntroduction";
 import { liveLineHeldElsewhere } from "./LiveCallBar";
 import { isRoutineApproval, isSkillApproval, pendingApprovals, spokenApprovalPrompt } from "./PendingApproval";
 import { track } from "@/lib/analytics";
@@ -128,8 +127,8 @@ export function CallTargetButton({
     localVoice ||
     (configured && (requireExplicitVoices ? everyTargetHasVoice : Boolean(state.config?.tts?.ready || everyTargetHasVoice)));
   // Taking turns listens on this device, which only the Mac app's own page
-  // can do. Elsewhere (a browser, the Windows or Linux app, My Cloud) the
-  // one-to-one call is Live, and Take turns says where it works instead.
+  // can do. Elsewhere (a browser, the Windows or Linux app, a server's page)
+  // the one-to-one call is Live, and Take turns says where it works instead.
   // Until the device is known, the picked mode holds.
   const turnsHere = !capabilitiesReady || capabilities.dictation.available;
   const mode = effectiveCallMode(useCallMode(), { turnsHere, canLive });
@@ -137,8 +136,6 @@ export function CallTargetButton({
   const turnsReady = capabilitiesReady && supported && voiceReady;
   const unavailable = !active && !liveElsewhere && !liveMode && !turnsReady;
   const voiceSetupRequired = capabilitiesReady && supported && !voiceReady;
-  // On the person's Cloud, the Live key is saved there, not on this computer.
-  const cloudHome = state.config?.cloudHome === true;
   const [helpOpen, setHelpOpen] = useState(false);
   // Voice set-up opens over the chat instead of the bot's full settings.
   const [voiceSetupOpen, setVoiceSetupOpen] = useState(false);
@@ -155,19 +152,14 @@ export function CallTargetButton({
   // here. A Live call always asks for the microphone first, so a page that
   // can't have one says so before anyone pastes a key it can't use.
   const keyPopover = canLive && !active && media.needsKey && media.botId === targetId;
-  // The harness answered that Live calls need a Pro plan (it asks for a key
-  // only after that): the Pro card here, where the key form would be.
-  const proPopover = canLive && !active && media.needsPro && media.botId === targetId;
-  const startPrompt = keyPopover || proPopover;
+  const startPrompt = keyPopover;
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const chevronRef = useRef<HTMLButtonElement>(null);
   const keyRef = useRef<HTMLDivElement>(null);
-  const proRef = useRef<HTMLDivElement>(null);
   const helpId = useId();
   const menuId = useId();
   const keyId = useId();
-  const proId = useId();
   const elsewhereName = liveElsewhere ? state.bots.find((candidate) => candidate.id === media.botId)?.name : undefined;
   const composer = placement === "composer";
   const label = active
@@ -204,15 +196,13 @@ export function CallTargetButton({
     dismissStartPrompt(targetId);
   }, [targetId]);
 
-  // The "no key" (or "no Pro plan") answer belongs to this chat's call
-  // attempt: leaving the chat drops it, so it never reopens (and takes
-  // focus) on a later visit.
+  // The "no key" answer belongs to this chat's call attempt: leaving the
+  // chat drops it, so it never reopens (and takes focus) on a later visit.
   useEffect(() => () => dismissStartPrompt(targetId), [targetId]);
 
   /** Start a call in this mode. Live never opens the overlay: the media
    * module marks the call and the call bar shows it. A Live call with no key
-   * yet asks for the microphone, then for the key (the harness's needsKey);
-   * without a Pro plan, it shows the Pro card instead (needsPro). */
+   * yet asks for the microphone, then for the key (the harness's needsKey). */
   const start = (next: CallMode) => {
     setHelpOpen(false);
     setMenuOpen(false);
@@ -256,15 +246,6 @@ export function CallTargetButton({
     keyShown.current = keyPopover;
     if (opened) keyRef.current?.querySelector<HTMLInputElement>("input")?.focus();
   }, [keyPopover]);
-  // ...and on the Pro card itself: what it offers depends on the plan, which
-  // arrives a moment after it opens, so a button focused first could be
-  // replaced under the person's focus.
-  const proShown = useRef(proPopover);
-  useEffect(() => {
-    const opened = proPopover && !proShown.current;
-    proShown.current = proPopover;
-    if (opened) proRef.current?.focus();
-  }, [proPopover]);
 
   // Another device (a phone, another window) holds the one Live line: no
   // button that would start a Live call here, as on the iPhone. The remote
@@ -295,7 +276,7 @@ export function CallTargetButton({
           start(liveMode ? "live" : "turns");
         }}
         aria-expanded={unavailable ? helpOpen : startPrompt ? true : undefined}
-        aria-controls={unavailable ? helpId : keyPopover ? keyId : proPopover ? proId : undefined}
+        aria-controls={unavailable ? helpId : keyPopover ? keyId : undefined}
         aria-label={label}
         title={label}
         data-call-button={placement}
@@ -354,7 +335,6 @@ export function CallTargetButton({
           mode={mode}
           turnsUnavailable={turnsHere ? null : capabilityHelp}
           placement={placement}
-          cloudHome={cloudHome}
           onClose={closePopovers}
           onChoose={(next) => {
             // picking a mode remembers it and starts a call in it
@@ -379,17 +359,6 @@ export function CallTargetButton({
         </div>
       )}
 
-      {proPopover && (
-        <div
-          ref={proRef}
-          id={proId}
-          tabIndex={-1}
-          className={cn("animate-pop-in absolute right-0 z-30 w-[340px] max-w-[90vw] rounded-xl shadow-2xl outline-none", composer ? "bottom-full mb-1.5" : "top-full mt-1.5")}
-        >
-          <LiveProPrompt />
-        </div>
-      )}
-
       {helpMotion.shown && (
         <div
           id={helpId}
@@ -407,7 +376,7 @@ export function CallTargetButton({
                 start("live");
               }}
               className="mt-2.5 mr-2 rounded-lg border border-hairline px-3 py-1.5 text-[12px] font-medium text-ink hover:bg-raised"
-              title={callModeHint("live", { cloudHome })}
+              title={callModeHint("live")}
             >
               {t("call.live.startInstead")}
             </button>
@@ -455,14 +424,12 @@ export function CallTargetButton({
 /** The menu under the call button's chevron: Take turns or Live. Where this
  * page can't take turns, Take turns stays in the menu, can't be picked, and
  * says why. */
-export function CallModeMenu({ id, mode, onChoose, onClose, placement = "header", cloudHome = false, turnsUnavailable = null }: {
+export function CallModeMenu({ id, mode, onChoose, onClose, placement = "header", turnsUnavailable = null }: {
   id: string;
   mode: CallMode;
   /** Why this page can't take turns; null where it can. */
   turnsUnavailable?: CallCapabilityHelp | null;
   placement?: CallButtonPlacement;
-  /** On the person's Cloud: the Live hint says the key stays there. */
-  cloudHome?: boolean;
   onChoose: (mode: CallMode) => void;
   onClose: () => void;
 }) {
@@ -504,7 +471,7 @@ export function CallModeMenu({ id, mode, onChoose, onClose, placement = "header"
             <span className="min-w-0 flex-1">
               <span className={cn("block text-[13px] font-medium", unavailable ? "text-ink-tertiary" : "text-ink")}>{t(entry.label)}</span>
               <span className="mt-0.5 block text-[11.5px] leading-[1.4] text-ink-secondary">
-                {unavailable ? `${unavailable.label}. ${unavailable.reason}` : callModeHint(entry.id, { cloudHome })}
+                {unavailable ? `${unavailable.label}. ${unavailable.reason}` : callModeHint(entry.id)}
               </span>
             </span>
             {mode === entry.id && <Check size={14} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />}
