@@ -1,18 +1,21 @@
-import { Link, Redirect, router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../components/Avatar";
 import { UpdateBanner } from "../../components/UpdateBanner";
+import { UpdateFooter } from "../../components/UpdateFooter";
 import { useFleet } from "../../lib/store";
 import type { WireBot, WireGroup, WireMessage } from "../../lib/types";
 
@@ -90,9 +93,146 @@ function Row({ item }: { item: Item }) {
   );
 }
 
+/** "+" sheet: New bot / New room — the companion relays these creates with
+ * loopback authority (POST /api/bots, /api/groups are phone-allowed). */
+function CreateSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { bots, createBot, createRoom } = useFleet();
+  const [mode, setMode] = React.useState<"menu" | "bot" | "room">("menu");
+  const [name, setName] = React.useState("");
+  const [picked, setPicked] = React.useState<Set<string>>(new Set());
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const reset = () => {
+    setMode("menu");
+    setName("");
+    setPicked(new Set());
+    setBusy(false);
+    setError("");
+  };
+  const close = () => {
+    reset();
+    onClose();
+  };
+
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (mode === "bot") await createBot(name.trim());
+      else await createRoom(name.trim(), [...picked]);
+      close();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create it");
+      setBusy(false);
+    }
+  };
+
+  const canCreate = mode === "bot" ? name.trim().length > 0 : picked.size > 0;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+      <Pressable style={sheet.backdrop} onPress={close}>
+        <Pressable style={sheet.card} onPress={(e) => e.stopPropagation()}>
+          {mode === "menu" ? (
+            <>
+              <Text style={sheet.title}>New</Text>
+              <Pressable style={sheet.option} onPress={() => setMode("bot")}>
+                <Text style={sheet.optionIcon}>◉</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={sheet.optionTitle}>New bot</Text>
+                  <Text style={sheet.optionSub}>A bot with its own chat</Text>
+                </View>
+              </Pressable>
+              <Pressable style={sheet.option} onPress={() => setMode("room")}>
+                <Text style={sheet.optionIcon}>◈</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={sheet.optionTitle}>New room</Text>
+                  <Text style={sheet.optionSub}>Several bots working together</Text>
+                </View>
+              </Pressable>
+              <View style={sheet.divider} />
+              <Pressable
+                style={sheet.option}
+                onPress={() => {
+                  close();
+                  router.push("/pair");
+                }}
+              >
+                <Text style={sheet.optionIcon}>⌁</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={sheet.optionTitle}>Pair another computer</Text>
+                  <Text style={sheet.optionSub}>QR code or a 6-digit code</Text>
+                </View>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={sheet.title}>{mode === "bot" ? "New bot" : "New room"}</Text>
+              <TextInput
+                style={sheet.input}
+                placeholder={mode === "bot" ? "Bot name" : "Room name (optional)"}
+                placeholderTextColor="#9a9a9e"
+                value={name}
+                onChangeText={setName}
+                autoFocus
+              />
+              {mode === "room" ? (
+                <View style={sheet.members}>
+                  <Text style={sheet.membersLabel}>Bots in this room</Text>
+                  {bots.map((bot) => {
+                    const on = picked.has(bot.id);
+                    return (
+                      <Pressable
+                        key={bot.id}
+                        style={sheet.memberRow}
+                        onPress={() =>
+                          setPicked((s) => {
+                            const next = new Set(s);
+                            if (next.has(bot.id)) next.delete(bot.id);
+                            else next.add(bot.id);
+                            return next;
+                          })
+                        }
+                      >
+                        <View style={[sheet.check, on && sheet.checkOn]}>
+                          {on ? <Text style={sheet.checkMark}>✓</Text> : null}
+                        </View>
+                        <Text style={sheet.memberName} numberOfLines={1}>
+                          {bot.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                  {!bots.length ? <Text style={sheet.optionSub}>No bots yet — create one first.</Text> : null}
+                </View>
+              ) : null}
+              {error ? <Text style={sheet.error}>{error}</Text> : null}
+              <View style={sheet.actions}>
+                <Pressable style={sheet.cancel} onPress={close} disabled={busy}>
+                  <Text style={sheet.cancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[sheet.create, !canCreate && sheet.createOff]}
+                  onPress={() => void submit()}
+                  disabled={!canCreate || busy}
+                >
+                  {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={sheet.createText}>Create</Text>}
+                </Pressable>
+              </View>
+            </>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function ChatsScreen() {
   const { bots, groups, status, refresh, unpair, serverName } = useFleet();
   const [refreshing, setRefreshing] = React.useState(false);
+  const [sheet, setSheet] = React.useState(false);
   const insets = useSafeAreaInsets();
 
   if (status === "unpaired") return <Redirect href="/pair" />;
@@ -133,14 +273,9 @@ export default function ChatsScreen() {
         </View>
         <Text style={styles.headerTitle}>{serverName || "Chats"}</Text>
         <View style={{ flex: 1 }} />
-        <Pressable style={styles.headerBtn} onPress={() => void refresh()}>
-          <Text style={styles.headerBtnText}>⌕</Text>
+        <Pressable style={styles.headerBtn} onPress={() => setSheet(true)}>
+          <Text style={styles.headerBtnText}>＋</Text>
         </Pressable>
-        <Link href="/pair" asChild>
-          <Pressable style={styles.headerBtn}>
-            <Text style={styles.headerBtnText}>＋</Text>
-          </Pressable>
-        </Link>
       </View>
       <UpdateBanner />
       <FlatList
@@ -159,7 +294,7 @@ export default function ChatsScreen() {
         ListEmptyComponent={
           status === "paired" ? (
             <View style={styles.empty}>
-              <Text style={styles.hint}>No bots or rooms yet — create one on your computer.</Text>
+              <Text style={styles.hint}>No bots or rooms yet — tap ＋ to create one.</Text>
             </View>
           ) : (
             <View style={styles.empty}>
@@ -169,6 +304,8 @@ export default function ChatsScreen() {
           )
         }
       />
+      <UpdateFooter />
+      <CreateSheet visible={sheet} onClose={() => setSheet(false)} />
     </View>
   );
 }
@@ -227,4 +364,67 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", fontWeight: "600" },
   link: { padding: 8 },
   linkText: { color: "#111", textDecorationLine: "underline" },
+});
+
+const sheet = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  card: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 28,
+  },
+  title: { fontSize: 17, fontWeight: "700", color: "#111", marginBottom: 12 },
+  option: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12 },
+  optionIcon: {
+    width: 42,
+    textAlign: "center",
+    fontSize: 22,
+    color: "#111",
+    backgroundColor: "#f4f4f5",
+    borderRadius: 21,
+    overflow: "hidden",
+    paddingVertical: 8,
+  },
+  optionTitle: { fontSize: 15, fontWeight: "600", color: "#111" },
+  optionSub: { fontSize: 12, color: "#888", marginTop: 1 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: "#e8e8ea", marginVertical: 6 },
+  input: {
+    borderRadius: 12,
+    backgroundColor: "#f4f4f5",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 15,
+    color: "#111",
+  },
+  members: { marginTop: 14, gap: 2, maxHeight: 240 },
+  membersLabel: { fontSize: 12, fontWeight: "600", color: "#888", marginBottom: 6, textTransform: "uppercase" },
+  memberRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
+  check: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: "#c9c9cd",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkOn: { backgroundColor: "#111", borderColor: "#111" },
+  checkMark: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  memberName: { fontSize: 15, color: "#111", flex: 1 },
+  error: { color: "#d64545", fontSize: 13, marginTop: 10 },
+  actions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 16 },
+  cancel: { paddingHorizontal: 16, paddingVertical: 10 },
+  cancelText: { color: "#666", fontWeight: "600", fontSize: 14 },
+  create: {
+    backgroundColor: "#111",
+    borderRadius: 10,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    minWidth: 90,
+    alignItems: "center",
+  },
+  createOff: { backgroundColor: "#c9c9cd" },
+  createText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 });

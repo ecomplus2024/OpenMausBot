@@ -3,14 +3,13 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../components/Avatar";
@@ -177,18 +176,12 @@ export default function ThreadScreen() {
             <Text style={styles.stopText}>■</Text>
           </Pressable>
         ) : null}
-        <Pressable style={styles.headerBtn} hitSlop={8}>
-          <Text style={styles.headerIcon}>⋯</Text>
-        </Pressable>
       </View>
 
-      {/* Android resizes the window (softwareKeyboardLayoutMode=resize), so
-       * only iOS needs the extra padding — doubling it on Android would push
-       * the composer up again on top of the resize. */}
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      {/* Edge-to-edge (forced on Android 15) disables adjustResize's window
+       * shrink, so the IME inset must be consumed in JS — keyboard-controller's
+       * KAV tracks the keyboard natively on both platforms. */}
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <FlatList
           inverted
           data={data}
@@ -209,9 +202,6 @@ export default function ThreadScreen() {
         />
         {!thread?.loaded ? <ActivityIndicator style={styles.loading} /> : null}
         <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
-          <Pressable style={styles.plusBtn}>
-            <Text style={styles.plusText}>＋</Text>
-          </Pressable>
           <TextInput
             style={styles.input}
             placeholder={`Ask ${title || "the bot"}`}
@@ -221,9 +211,6 @@ export default function ThreadScreen() {
             multiline
             editable={!sending}
           />
-          <Pressable style={styles.micBtn}>
-            <Text style={styles.micText}>🎙</Text>
-          </Pressable>
           <Pressable style={[styles.send, (!draft.trim() || sending) && styles.sendOff]} onPress={() => void send()}>
             <Text style={styles.sendText}>➤</Text>
           </Pressable>
@@ -295,15 +282,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: "#e8e8ea",
   },
-  plusBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#f1f1f3",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  plusText: { fontSize: 20, color: "#333" },
   input: {
     flex: 1,
     maxHeight: 120,
@@ -314,8 +292,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#111",
   },
-  micBtn: { width: 36, height: 38, alignItems: "center", justifyContent: "center" },
-  micText: { fontSize: 16, color: "#555" },
   send: {
     width: 38,
     height: 38,

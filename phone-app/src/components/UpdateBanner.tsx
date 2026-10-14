@@ -4,8 +4,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { checkForUpdate, openUpdate, type AvailableUpdate } from "../lib/updates";
 
 /** Slim banner above the chat list — appears only when the GitHub release
- * asset is newer than this build. Tapping downloads then opens the system
- * installer, which asks for one confirm and "install unknown apps" once. */
+ * asset is newer than this build. Tapping opens the APK in the browser and
+ * Android's installer takes it from there (one confirm). */
 export function UpdateBanner() {
   const [update, setUpdate] = useState<AvailableUpdate | null>(null);
   const [progress, setProgress] = useState<number | null>(null);

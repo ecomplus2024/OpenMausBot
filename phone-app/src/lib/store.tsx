@@ -52,6 +52,8 @@ interface FleetState {
 interface FleetActions {
   connect(): Promise<void>;
   refresh(): Promise<void>;
+  createBot(name: string): Promise<void>;
+  createRoom(name: string, memberIds: string[]): Promise<void>;
   openThread(threadId: string): Promise<void>;
   loadOlder(threadId: string): Promise<void>;
   sendText(threadId: string, text: string): Promise<void>;
@@ -172,10 +174,22 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
           setState((s) => ({
             ...s,
             bots: s.bots.map((b) =>
-              b.threadId === threadId ? { ...b, unread: message.role === "bot" ? true : b.unread, messages: undefined } : b,
+              b.threadId === threadId
+                ? {
+                    ...b,
+                    unread: message.role === "bot" ? true : b.unread,
+                    messages: b.messages ? upsertMessage(b.messages, message) : b.messages,
+                  }
+                : b,
             ),
             groups: s.groups.map((g) =>
-              g.threadId === threadId ? { ...g, unread: message.role === "bot" ? true : g.unread } : g,
+              g.threadId === threadId
+                ? {
+                    ...g,
+                    unread: message.role === "bot" ? true : g.unread,
+                    messages: g.messages ? upsertMessage(g.messages, message) : g.messages,
+                  }
+                : g,
             ),
           }));
           return;
@@ -213,6 +227,26 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
       eventsRef.current?.close();
     };
   }, [connect]);
+
+  const createBot = useCallback(
+    async (name: string) => {
+      const client = clientRef.current;
+      if (!client) return;
+      await client.api("/api/bots", { method: "POST", body: JSON.stringify({ name }) });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const createRoom = useCallback(
+    async (name: string, memberIds: string[]) => {
+      const client = clientRef.current;
+      if (!client) return;
+      await client.api("/api/groups", { method: "POST", body: JSON.stringify({ name, memberIds }) });
+      await refresh();
+    },
+    [refresh],
+  );
 
   const openThread = useCallback(
     async (threadId: string) => {
@@ -359,6 +393,8 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
       ...state,
       connect,
       refresh,
+      createBot,
+      createRoom,
       openThread,
       loadOlder,
       sendText,
@@ -370,7 +406,7 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
       imageSource,
       unpair,
     }),
-    [state, connect, refresh, openThread, loadOlder, sendText, interrupt, markRead, answerCard, dismissCard, setMark, imageSource, unpair],
+    [state, connect, refresh, createBot, createRoom, openThread, loadOlder, sendText, interrupt, markRead, answerCard, dismissCard, setMark, imageSource, unpair],
   );
 
   return <FleetContext.Provider value={value}>{children}</FleetContext.Provider>;

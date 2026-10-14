@@ -15,7 +15,7 @@
       "package": "com.openmausbot.phone",
       "usesCleartextTraffic": true,
       "softwareKeyboardLayoutMode": "resize",
-      "versionCode": 1791949218,
+      "versionCode": 1791956006,
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/android-icon-foreground.png",
