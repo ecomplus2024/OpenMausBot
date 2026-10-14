@@ -3,13 +3,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../../components/Avatar";
@@ -181,7 +182,13 @@ export default function ThreadScreen() {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView style={styles.flex} behavior="padding" keyboardVerticalOffset={0}>
+      {/* Android resizes the window (softwareKeyboardLayoutMode=resize), so
+       * only iOS needs the extra padding — doubling it on Android would push
+       * the composer up again on top of the resize. */}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <FlatList
           inverted
           data={data}
