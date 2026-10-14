@@ -93,6 +93,10 @@ export function openEvents(client: Client, callbacks: EventsCallbacks): EventsHa
     } catch {
       if (closed) return;
       callbacks.onStatus?.(false);
+      // A dead route can sit in `active` (e.g. a LAN endpoint that went away).
+      // ping walks every endpoint and re-points `active` at the first that
+      // answers, so the next reconnect doesn't retry the same dead URL.
+      void client.ping().catch(() => {});
       schedule();
     }
   };

@@ -79,7 +79,11 @@ function cardResponse(card: OptionCardData, option: string) {
 }
 
 function upsertMessage(list: WireMessage[], message: WireMessage): WireMessage[] {
-  const index = list.findIndex((m) => m.id === message.id);
+  // The server echoes the `sendId` we posted, so an optimistic `local-…`
+  // bubble is replaced by the real row instead of duplicated under it.
+  const index = list.findIndex(
+    (m) => m.id === message.id || (message.sendId !== undefined && m.id === message.sendId),
+  );
   if (index === -1) return [...list, message].sort((a, b) => a.at - b.at);
   const next = [...list];
   next[index] = { ...next[index], ...message };
@@ -291,19 +295,32 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
       const client = clientRef.current;
       const owner = ownerFor(threadId);
       if (!client || !owner) return;
+      // Server `at` stamps can run ahead of the phone clock; pinning the
+      // optimistic row just past the latest known stamp keeps it at the
+      // bottom until the echo (matched by sendId) lands in its real slot.
+      const existing = threadsRef.current[threadId]?.messages ?? [];
+      const lastAt = existing.length ? existing[existing.length - 1].at : 0;
       const optimistic: WireMessage = {
         id: `local-${Date.now()}`,
         role: "user",
         kind: "text",
         text,
-        at: Date.now(),
+        at: Math.max(Date.now(), lastAt + 1),
       };
-      patchThread(threadId, { messages: upsertMessage(threadsRef.current[threadId]?.messages ?? [], optimistic) });
+      patchThread(threadId, { messages: upsertMessage(existing, optimistic) });
       const path = owner.kind === "bot" ? `/api/bots/${owner.id}/messages` : `/api/groups/${owner.id}/messages`;
-      await client.api(path, {
-        method: "POST",
-        body: JSON.stringify({ text, threadId, sendId: optimistic.id }),
-      });
+      try {
+        await client.api(path, {
+          method: "POST",
+          body: JSON.stringify({ text, threadId, sendId: optimistic.id }),
+        });
+      } catch (error) {
+        // A failed send must not leave a ghost bubble behind.
+        patchThread(threadId, {
+          messages: (threadsRef.current[threadId]?.messages ?? []).filter((m) => m.id !== optimistic.id),
+        });
+        throw error;
+      }
     },
     [ownerFor, patchThread],
   );

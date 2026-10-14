@@ -89,8 +89,13 @@ export class Client {
     const urls = new Set(incoming.map((e) => e.url));
     const extra = this.session.endpoints.filter((e) => !urls.has(e.url));
     const next = [...incoming, ...extra].slice(0, 8);
+    // The merge reorders the list, so `active` must follow the URL that was
+    // last answering — otherwise every request burns a timeout on whatever
+    // dead LAN route landed at the old index first.
+    const activeUrl = this.session.endpoints[this.active]?.url;
+    const stillThere = next.findIndex((e) => e.url === activeUrl);
     this.session = { ...this.session, endpoints: next };
-    this.active = Math.min(this.active, next.length - 1);
+    this.active = stillThere >= 0 ? stillThere : Math.min(this.active, next.length - 1);
     this.onSessionChange?.(this.session);
   }
 
