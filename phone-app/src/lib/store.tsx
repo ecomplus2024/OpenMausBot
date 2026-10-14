@@ -106,6 +106,15 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     threadsRef.current = state.threads;
   }, [state.threads]);
+  // Same trick for the fleet: callbacks like ownerFor must stay referentially
+  // stable across every SSE update, or screens' effects (openThread → markRead)
+  // re-fire and a refetched page wipes a just-sent optimistic bubble.
+  const botsRef = useRef(state.bots);
+  const groupsRef = useRef(state.groups);
+  useEffect(() => {
+    botsRef.current = state.bots;
+    groupsRef.current = state.groups;
+  }, [state.bots, state.groups]);
 
   const patchThread = useCallback((threadId: string, patch: Partial<ThreadState>) => {
     setState((s) => {
@@ -279,16 +288,13 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
     [patchThread],
   );
 
-  const ownerFor = useCallback(
-    (threadId: string): { kind: "bot" | "group"; id: string } | null => {
-      const bot = state.bots.find((b) => b.threadId === threadId || b.tasks?.some((t) => t.threadId === threadId));
-      if (bot) return { kind: "bot", id: bot.id };
-      const group = state.groups.find((g) => g.threadId === threadId || g.tasks?.some((t) => t.threadId === threadId));
-      if (group) return { kind: "group", id: group.id };
-      return null;
-    },
-    [state.bots, state.groups],
-  );
+  const ownerFor = useCallback((threadId: string): { kind: "bot" | "group"; id: string } | null => {
+    const bot = botsRef.current.find((b) => b.threadId === threadId || b.tasks?.some((t) => t.threadId === threadId));
+    if (bot) return { kind: "bot", id: bot.id };
+    const group = groupsRef.current.find((g) => g.threadId === threadId || g.tasks?.some((t) => t.threadId === threadId));
+    if (group) return { kind: "group", id: group.id };
+    return null;
+  }, []);
 
   const sendText = useCallback(
     async (threadId: string, text: string) => {
