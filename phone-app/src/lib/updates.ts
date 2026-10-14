@@ -3,12 +3,10 @@
 // builds compare their baked android.versionCode against it, so a device
 // running the newest APK never prompts for its own update.
 //
-// Android always asks the user to confirm the install once — nothing
-// outside Play can skip that confirmation.
+// The download itself is handed to the system browser: it downloads the
+// APK, then Android's installer takes over with its usual one confirm.
 import Constants from "expo-constants";
-import { File, Paths } from "expo-file-system";
-import * as IntentLauncher from "expo-intent-launcher";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 
 const RELEASE_API =
   "https://api.github.com/repos/ecomplus2024/OpenMausBot/releases/tags/v1.0.0-phone";
@@ -52,21 +50,8 @@ export async function checkForUpdate(): Promise<AvailableUpdate | null> {
   }
 }
 
-/** Download to cache, then hand off to the system package installer. */
-export async function downloadAndInstall(
-  update: AvailableUpdate,
-  onProgress?: (fraction: number) => void,
-): Promise<void> {
-  const dest = new File(Paths.cache, "openmausbot-update.apk");
-  if (dest.exists) dest.delete();
-  onProgress?.(0);
-  const file = await File.downloadFileAsync(update.url, dest);
-  onProgress?.(1);
-  // file.contentUri is served through expo-file-system's FileProvider —
-  // the installer can read it once we grant the URI permission.
-  await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-    data: file.contentUri,
-    flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-    type: "application/vnd.android.package-archive",
-  });
+/** Hand the APK link to the system browser — it downloads and Android's
+ * installer offers the update on top of the existing app. */
+export async function openUpdate(update: AvailableUpdate): Promise<void> {
+  await Linking.openURL(update.url);
 }

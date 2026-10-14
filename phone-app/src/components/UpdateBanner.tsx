@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { checkForUpdate, downloadAndInstall, type AvailableUpdate } from "../lib/updates";
+import { checkForUpdate, openUpdate, type AvailableUpdate } from "../lib/updates";
 
 /** Slim banner above the chat list — appears only when the GitHub release
  * asset is newer than this build. Tapping downloads then opens the system
@@ -30,9 +30,9 @@ export function UpdateBanner() {
         <Text style={styles.title}>Update available</Text>
         <Text style={styles.sub} numberOfLines={1}>
           {failed
-            ? "Install failed — download from the release page instead"
+            ? "Could not open the download — try the release page"
             : installing
-              ? `Downloading ${Math.round(update.size / 1024 / 1024)} MB…`
+              ? "Opening download…"
               : `${Math.round(update.size / 1024 / 1024)} MB · tap Install`}
         </Text>
       </View>
@@ -43,7 +43,7 @@ export function UpdateBanner() {
           onPress={() => {
             setProgress(0);
             setFailed(false);
-            void downloadAndInstall(update, setProgress).catch(() => {
+            void openUpdate(update).then(() => setProgress(null)).catch(() => {
               setProgress(null);
               setFailed(true);
             });
