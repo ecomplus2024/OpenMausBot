@@ -6,7 +6,7 @@
 // Android always asks the user to confirm the install once — nothing
 // outside Play can skip that confirmation.
 import Constants from "expo-constants";
-import * as FileSystem from "expo-file-system/legacy";
+import { File, Paths } from "expo-file-system";
 import * as IntentLauncher from "expo-intent-launcher";
 import { Platform } from "react-native";
 
@@ -57,20 +57,15 @@ export async function downloadAndInstall(
   update: AvailableUpdate,
   onProgress?: (fraction: number) => void,
 ): Promise<void> {
-  const target = `${FileSystem.cacheDirectory}openmausbot-update.apk`;
-  const task = FileSystem.createDownloadResumable(
-    update.url,
-    target,
-    {},
-    (p) => onProgress?.(p.totalBytesExpectedToWrite ? p.totalBytesWritten / p.totalBytesExpectedToWrite : 0),
-  );
-  const result = await task.downloadAsync();
-  if (!result?.uri) throw new Error("Download failed");
-  // expo-file-system ships a FileProvider — getContentUriAsync returns a
-  // content:// URI the installer can read.
-  const contentUri = await FileSystem.getContentUriAsync(result.uri);
+  const dest = new File(Paths.cache, "openmausbot-update.apk");
+  if (dest.exists) dest.delete();
+  onProgress?.(0);
+  const file = await File.downloadFileAsync(update.url, dest);
+  onProgress?.(1);
+  // file.contentUri is served through expo-file-system's FileProvider —
+  // the installer can read it once we grant the URI permission.
   await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-    data: contentUri,
+    data: file.contentUri,
     flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
     type: "application/vnd.android.package-archive",
   });

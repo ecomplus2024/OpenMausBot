@@ -32,7 +32,7 @@ export function UpdateBanner() {
           {failed
             ? "Install failed — download from the release page instead"
             : installing
-              ? `Downloading… ${Math.round((progress ?? 0) * 100)}%`
+              ? `Downloading ${Math.round(update.size / 1024 / 1024)} MB…`
               : `${Math.round(update.size / 1024 / 1024)} MB · tap Install`}
         </Text>
       </View>
